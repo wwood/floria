@@ -1,22 +1,22 @@
 use crate::alignment;
-use log::*;
-use std::ffi::{OsString};
-use std::process::Command;
 use crate::constants;
 use crate::types_structs::{
-    build_frag, Frag, Genotype, GnPosition, SnpPosition, VcfProfile, Options
+    build_frag, Frag, Genotype, GnPosition, Options, SnpPosition, VcfProfile,
 };
+use bio::io::fasta::IndexedReader as FastaIndexedReader;
 use debruijn::dna_string::DnaString;
 use fxhash::{FxHashMap, FxHashSet};
+use log::*;
 use rayon::prelude::*;
 use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::bam::IndexedReader;
-use bio::io::fasta::{IndexedReader as FastaIndexedReader};
 use rust_htslib::{bam, bam::Read as DUMMY_NAME1};
 use rust_htslib::{bcf, bcf::Read as DUMMY_NAME2};
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::process::Command;
 use std::str;
 use std::sync::Mutex;
 
@@ -108,30 +108,29 @@ where
     frags_map
 }
 
-
-
 //Read a vcf file to get the genotypes. We read genotypes into a dictionary of keypairs where the
 //keys are positions, and the values are dictionaries which encode the genotypes. E.g. the genotype
 //1 1 0 0 at position 5 would be (5,{1 : 2, 0 : 2}).
-pub fn get_genotypes_from_vcf_hts<P>(
-    vcf_file: P,
-) -> FxHashMap<String, Vec<usize>>
+pub fn get_genotypes_from_vcf_hts<P>(vcf_file: P) -> FxHashMap<String, Vec<usize>>
 where
     P: AsRef<Path>,
 {
     let acgt_upper = [b'A', b'C', b'G', b'T'];
     let mut vcf = match bcf::Reader::from_path(vcf_file) {
         Ok(vcf) => vcf,
-        Err(_) =>{ error!("rust_htslib had an error while reading the VCF file. Exiting."); std::process::exit(1)},
+        Err(_) => {
+            error!("rust_htslib had an error while reading the VCF file. Exiting.");
+            std::process::exit(1)
+        }
     };
     let mut map_positions_vec = FxHashMap::default();
     //let mut positions_vec = Vec::new();
     //let mut genotype_dict = FxHashMap::default();
     let header = vcf.header().clone();
 
-//    if header.sample_count() > 1 {
-//        panic!("More than 1 sample detected in header of vcf file; please use only 1 sample");
-//    }
+    //    if header.sample_count() > 1 {
+    //        panic!("More than 1 sample detected in header of vcf file; please use only 1 sample");
+    //    }
 
     //    if header.contig_count() > 1 {
     //        panic!("More than 1 contig detected in header of vcf file; please use only 1 contig/reference per vcf file.");
@@ -142,7 +141,7 @@ where
     for rec in vcf.records() {
         let unr = rec.unwrap();
         let alleles = unr.alleles();
-        let mut is_snp = true;
+        let mut is_valid_variant = true;
         let record_rid = unr.rid().unwrap();
         let ref_chrom_vcf = header.rid2name(record_rid).unwrap();
         if last_ref_chrom != ref_chrom_vcf {
@@ -150,26 +149,27 @@ where
         }
 
         for allele in alleles.iter() {
-            if allele.len() > 1 {
-                is_snp = false;
+            if allele.is_empty() {
+                is_valid_variant = false;
                 break;
             }
-            else if acgt_upper.iter().all(|x| *x != allele[0].to_ascii_uppercase()){
-                log::warn!("Non A/C/G/T character '{}' detected in VCF. This may cause problems. Skipping...", allele[0] as char);
-                is_snp = false;
+            if !allele.iter().all(|x| {
+                acgt_upper
+                    .iter()
+                    .any(|valid| *valid == x.to_ascii_uppercase())
+            }) {
+                log::warn!(
+                    "Non A/C/G/T character '{}' detected in VCF. This may cause problems. Skipping...",
+                    allele[0] as char
+                );
+                is_valid_variant = false;
                 break;
             }
-
         }
 
-        if !is_snp {
-            //            println!(
-            //                "VCF : Variant at position {} is not a snp. Ignoring.",
-            //                unr.pos()
-            //            );
+        if !is_valid_variant {
             continue;
         }
-
 
         let positions_vec = map_positions_vec
             .entry(String::from_utf8(ref_chrom_vcf.to_vec()).unwrap())
@@ -180,14 +180,12 @@ where
     map_positions_vec
 }
 
-
-
 fn alignment_passed_check(
     flags: u16,
     mapq: u8,
     use_supplementary: bool,
     filter_supplementary: bool,
-    mapq_cutoff: u8
+    mapq_cutoff: u8,
 ) -> (bool, bool) {
     let errors_mask = 1796;
     let secondary_mask = 256;
@@ -234,14 +232,15 @@ fn alignment_passed_check(
     return (true, is_supp);
 }
 
-
-
 pub fn get_vcf_profile<'a>(vcf_file: &str, ref_chroms: &'a Vec<String>) -> VcfProfile<'a> {
     let acgt_upper = [b'A', b'C', b'G', b'T'];
     let mut vcf_prof = VcfProfile::default();
     let mut vcf = match bcf::Reader::from_path(vcf_file) {
         Ok(vcf) => vcf,
-        Err(_) =>{ error!("rust_htslib had an error while reading the VCF file. Exiting."); std::process::exit(1)},
+        Err(_) => {
+            error!("rust_htslib had an error while reading the VCF file. Exiting.");
+            std::process::exit(1)
+        }
     };
     let mut snp_counter = 1;
     let mut vcf_pos_allele_map = FxHashMap::default();
@@ -259,7 +258,7 @@ pub fn get_vcf_profile<'a>(vcf_file: &str, ref_chroms: &'a Vec<String>) -> VcfPr
         let unr = rec.unwrap();
         let alleles = unr.alleles();
         let mut al_vec = Vec::new();
-        let mut is_snp = true;
+        let mut is_valid_variant = true;
 
         let record_rid = unr.rid().unwrap();
         let ref_chrom_vcf =
@@ -286,18 +285,22 @@ pub fn get_vcf_profile<'a>(vcf_file: &str, ref_chroms: &'a Vec<String>) -> VcfPr
             .or_insert(FxHashMap::default());
 
         for allele in alleles.iter() {
-            if allele.len() > 1 {
-                is_snp = false;
+            if allele.is_empty() {
+                is_valid_variant = false;
                 break;
             }
-            else if acgt_upper.iter().all(|x| *x != allele[0].to_ascii_uppercase()){
-                is_snp = false;
+            if !allele.iter().all(|x| {
+                acgt_upper
+                    .iter()
+                    .any(|valid| *valid == x.to_ascii_uppercase())
+            }) {
+                is_valid_variant = false;
                 break;
             }
-            al_vec.push(allele[0] as Genotype);
+            al_vec.push(allele.iter().map(|b| b.to_ascii_uppercase()).collect());
         }
 
-        if !is_snp {
+        if !is_valid_variant {
             continue;
         }
 
@@ -313,13 +316,50 @@ pub fn get_vcf_profile<'a>(vcf_file: &str, ref_chroms: &'a Vec<String>) -> VcfPr
     return vcf_prof;
 }
 
-pub fn get_bam_readers(
-    options: &Options,
-) -> (bam::IndexedReader, Option<bam::IndexedReader>){
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn get_vcf_profile_retains_indels() {
+        let vcf_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("indels.vcf");
+        let contigs = vec!["chr1".to_string()];
+
+        let vcf_profile = get_vcf_profile(vcf_path.to_str().unwrap(), &contigs);
+
+        let allele_map = vcf_profile
+            .vcf_pos_allele_map
+            .get("chr1")
+            .expect("contig alleles missing");
+        assert_eq!(allele_map.len(), 2, "indel positions should be recorded");
+        assert!(allele_map.contains_key(&9));
+        assert!(allele_map.contains_key(&19));
+        assert_eq!(allele_map[&9].len(), 2, "ref + alt for insertion");
+        assert_eq!(allele_map[&19].len(), 2, "ref + alt for deletion");
+        assert_eq!(allele_map[&9][0], b"A".to_vec());
+        assert_eq!(allele_map[&9][1], b"AT".to_vec());
+        assert_eq!(allele_map[&19][0], b"AT".to_vec());
+        assert_eq!(allele_map[&19][1], b"A".to_vec());
+
+        let pos_to_counter = &vcf_profile.vcf_pos_to_snp_counter_map["chr1"];
+        let snp_to_pos = &vcf_profile.vcf_snp_pos_to_gn_pos_map["chr1"];
+        assert_eq!(pos_to_counter.len(), 2);
+        assert_eq!(snp_to_pos.len(), 2);
+        assert_eq!(pos_to_counter[&9], 1);
+        assert_eq!(pos_to_counter[&19], 2);
+        assert_eq!(snp_to_pos[&1], 9);
+        assert_eq!(snp_to_pos[&2], 19);
+    }
+}
+
+pub fn get_bam_readers(options: &Options) -> (bam::IndexedReader, Option<bam::IndexedReader>) {
     let long_bam_file = &options.bam_file;
     let short_bam_file = &options.short_bam_file;
     let short_bam_read;
-    if short_bam_file != ""{
+    if short_bam_file != "" {
         let short_bam = match bam::IndexedReader::from_path(short_bam_file) {
             Ok(short_bam) => short_bam,
             Err(_) => {
@@ -328,13 +368,15 @@ pub fn get_bam_readers(
             }
         };
         short_bam_read = Some(short_bam);
-    }
-    else{
+    } else {
         short_bam_read = None;
     }
     let long_bam = match bam::IndexedReader::from_path(long_bam_file) {
         Ok(long_bam) => long_bam,
-        Err(_) =>{ error!("rust_htslib had an error while reading BAM file. Exiting");std::process::exit(1)},
+        Err(_) => {
+            error!("rust_htslib had an error while reading BAM file. Exiting");
+            std::process::exit(1)
+        }
     };
 
     return (long_bam, short_bam_read);
@@ -347,9 +389,7 @@ pub fn get_frags_from_bamvcf_rewrite(
     options: &Options,
     chrom_seqs: &mut Option<FastaIndexedReader<std::fs::File>>,
     contig: &str,
-) -> (Vec<Frag>, Vec<Frag>)
-{
-
+) -> (Vec<Frag>, Vec<Frag>) {
     let filter_supplementary = true;
     let use_supplementary = !options.dont_use_supp_aln;
     let vcf_pos_allele_map = &vcf_profile.vcf_pos_allele_map;
@@ -367,7 +407,7 @@ pub fn get_frags_from_bamvcf_rewrite(
     }
 
     let mut record_vec_short = vec![];
-    if short_bam.is_some(){
+    if short_bam.is_some() {
         let short_bam = short_bam.as_mut().unwrap();
         short_bam.fetch(contig).unwrap();
         for record in short_bam.records() {
@@ -376,15 +416,26 @@ pub fn get_frags_from_bamvcf_rewrite(
             }
         }
     }
-    let mut seq = Vec::new(); 
-    if chrom_seqs.is_some(){
-        chrom_seqs.as_mut().unwrap().fetch_all(contig).expect("Error reading fasta file.");
-        chrom_seqs.as_mut().unwrap().read(&mut seq).expect("Error reading fasta file.");
+    let mut seq = Vec::new();
+    if chrom_seqs.is_some() {
+        chrom_seqs
+            .as_mut()
+            .unwrap()
+            .fetch_all(contig)
+            .expect("Error reading fasta file.");
+        chrom_seqs
+            .as_mut()
+            .unwrap()
+            .read(&mut seq)
+            .expect("Error reading fasta file.");
     }
 
     let ref_id_to_frag_map: Mutex<FxHashMap<_, _>> = Mutex::new(FxHashMap::default());
     let rec_vecs = vec![record_vec_short, record_vec_long];
-    log::info!("Number of records in BAM file for contig: {}", rec_vecs[0].len() + rec_vecs[1].len());
+    log::info!(
+        "Number of records in BAM file for contig: {}",
+        rec_vecs[0].len() + rec_vecs[1].len()
+    );
     for record_vec in rec_vecs {
         record_vec
             .into_par_iter()
@@ -398,7 +449,7 @@ pub fn get_frags_from_bamvcf_rewrite(
                         record.mapq(),
                         use_supplementary,
                         filter_supplementary,
-                        options.mapq_cutoff
+                        options.mapq_cutoff,
                     );
 
                     //                    log::trace!(
@@ -418,19 +469,14 @@ pub fn get_frags_from_bamvcf_rewrite(
                         let mut frag =
                             frag_from_record(&record, snp_positions_contig, pos_allele_map, count);
 
-//                        if frag.seq_dict.keys().len() > 0 {
+                        //                        if frag.seq_dict.keys().len() > 0 {
                         if !chrom_seqs.is_none() {
-                            alignment::realign(
-                                &seq,
-                                &mut frag,
-                                &snp_to_gn_map,
-                                &pos_allele_map,
-                            );
+                            alignment::realign(&seq, &mut frag, &snp_to_gn_map, &pos_allele_map);
                         }
                         let mut locked = ref_id_to_frag_map.lock().unwrap();
                         let bucket = locked.entry(rec_name).or_insert(vec![]);
                         bucket.push((record.flags(), frag));
-//                        }
+                        //                        }
                     }
                 }
             });
@@ -450,11 +496,10 @@ pub fn get_frags_from_bamvcf_rewrite(
     //    }
     let mut frags_with_snps = vec![];
     let mut frags_without_snps = vec![];
-    for frag in ref_vec_frags{
-        if frag.seq_dict.keys().len() > 0{
+    for frag in ref_vec_frags {
+        if frag.seq_dict.keys().len() > 0 {
             frags_with_snps.push(frag);
-        }
-        else{
+        } else {
             frags_without_snps.push(frag);
         }
     }
@@ -466,8 +511,10 @@ pub fn get_fasta_seqs(fasta_file: &str) -> FastaIndexedReader<std::fs::File> {
     os_string.push(".");
     os_string.push("fai");
     let fai_path: &str = os_string.to_str().unwrap();
-    if !Path::new(fai_path).exists(){
-        log::warn!(".fai index not detected. Trying to index using samtools faidx if it is in PATH.");
+    if !Path::new(fai_path).exists() {
+        log::warn!(
+            ".fai index not detected. Trying to index using samtools faidx if it is in PATH."
+        );
         let status = Command::new("samtools")
             .arg("faidx")
             .arg(fasta_file)
@@ -481,8 +528,7 @@ pub fn get_fasta_seqs(fasta_file: &str) -> FastaIndexedReader<std::fs::File> {
     let reader = FastaIndexedReader::from_file(&fasta_file.to_string());
     if !reader.is_err() {
         return reader.unwrap();
-    }
-    else{
+    } else {
         log::error!("Could not read fasta file. Exiting.");
         std::process::exit(1);
     }
@@ -492,7 +538,7 @@ fn combine_frags(
     id_to_frag_map: FxHashMap<Vec<u8>, Vec<(u16, Frag)>>,
     vcf_profile: &VcfProfile,
     contig: &str,
-    options: &Options
+    options: &Options,
 ) -> Vec<Frag> {
     let first_in_pair_mask = 64;
     let second_in_pair_mask = 128;
@@ -545,8 +591,10 @@ fn combine_frags(
             first_frag.last_position =
                 SnpPosition::max(first_frag.last_position, sec_frag.last_position);
 
-            first_frag.first_pos_base = GnPosition::min(first_frag.first_pos_base, sec_frag.first_pos_base);
-            first_frag.last_pos_base = GnPosition::min(first_frag.last_pos_base, sec_frag.last_pos_base);
+            first_frag.first_pos_base =
+                GnPosition::min(first_frag.first_pos_base, sec_frag.first_pos_base);
+            first_frag.last_pos_base =
+                GnPosition::min(first_frag.last_pos_base, sec_frag.last_pos_base);
 
             let mut temp = DnaString::new();
             std::mem::swap(&mut sec_frag.seq_string[0], &mut temp);
@@ -575,7 +623,7 @@ fn combine_frags(
                 //                    &frag.1.snp_pos_to_seq_pos[&frag.1.first_position],
                 //                    &frag.1.snp_pos_to_seq_pos[&frag.1.last_position]
                 //                );
-                if frag.1.is_paired{
+                if frag.1.is_paired {
                     log::warn!("Fragment {} is paired but appears in more than two mappings -- possibly a supplementary alignment. Careful.", &frag.1.id);
                 }
             }
@@ -583,7 +631,7 @@ fn combine_frags(
             let mut supp_intervals = vec![];
 
             for frag in frags.iter() {
-                if frag.1.seq_dict.len() > 0{
+                if frag.1.seq_dict.len() > 0 {
                     supp_intervals.push((frag.1.first_position, frag.1.last_position));
                 }
             }
@@ -592,7 +640,7 @@ fn combine_frags(
             let snp_to_gn = &vcf_profile.vcf_snp_pos_to_gn_pos_map[contig];
             let mut take_primary_only = false;
             //dbg!(&supp_intervals);
-            if supp_intervals.len() > 0{
+            if supp_intervals.len() > 0 {
                 for i in 0..supp_intervals.len() - 1 {
                     if snp_to_gn[&supp_intervals[i + 1].0] as i64
                         - snp_to_gn[&supp_intervals[i].1] as i64
@@ -643,8 +691,10 @@ fn combine_frags(
                     primary_frag.last_position =
                         SnpPosition::max(primary_frag.last_position, frag.last_position);
 
-                    primary_frag.first_pos_base = GnPosition::min(primary_frag.first_pos_base, frag.first_pos_base);
-                    primary_frag.last_pos_base = GnPosition::min(primary_frag.last_pos_base, frag.last_pos_base);
+                    primary_frag.first_pos_base =
+                        GnPosition::min(primary_frag.first_pos_base, frag.first_pos_base);
+                    primary_frag.last_pos_base =
+                        GnPosition::min(primary_frag.last_pos_base, frag.last_pos_base);
 
                     primary_frag
                         .snp_pos_to_seq_pos
@@ -658,10 +708,108 @@ fn combine_frags(
     return ref_frags;
 }
 
+fn match_allele_for_record(
+    record: &bam::Record,
+    genome_pos: GnPosition,
+    alleles: &Vec<Vec<u8>>,
+) -> Option<usize> {
+    if alleles.is_empty() {
+        return None;
+    }
+
+    let ref_len = alleles[0].len();
+    let mut ref_to_read: FxHashMap<GnPosition, u8> = FxHashMap::default();
+    let aligned_pairs: Vec<[Option<i64>; 2]> = record.aligned_pairs_full().collect();
+    for pair in aligned_pairs.iter() {
+        if pair[0].is_some() && pair[1].is_some() {
+            ref_to_read.insert(
+                pair[1].unwrap() as GnPosition,
+                record.seq()[pair[0].unwrap() as usize].to_ascii_uppercase(),
+            );
+        }
+    }
+
+    let anchor_idx = aligned_pairs
+        .iter()
+        .position(|p| p[1].map(|r| r as GnPosition) == Some(genome_pos))?;
+    let anchor_read_pos = aligned_pairs[anchor_idx][0]? as usize;
+    let anchor_base = record.seq()[anchor_read_pos].to_ascii_uppercase();
+
+    let mut insert_bases = Vec::new();
+    let mut idx = anchor_idx + 1;
+    while idx < aligned_pairs.len() && aligned_pairs[idx][1].is_none() {
+        if let Some(read_pos) = aligned_pairs[idx][0] {
+            insert_bases.push(record.seq()[read_pos as usize].to_ascii_uppercase());
+        }
+        idx += 1;
+    }
+
+    let mut del_len = 0usize;
+    while idx < aligned_pairs.len()
+        && aligned_pairs[idx][0].is_none()
+        && aligned_pairs[idx][1].is_some()
+    {
+        del_len += 1;
+        idx += 1;
+    }
+
+    'allele_check: for (allele_index, allele) in alleles.iter().enumerate() {
+        if allele.is_empty() {
+            continue;
+        }
+
+        if allele[0].to_ascii_uppercase() != anchor_base {
+            continue;
+        }
+
+        let allele_len = allele.len();
+        let expected_ins = allele_len.saturating_sub(ref_len);
+        let expected_del = ref_len.saturating_sub(allele_len);
+
+        if expected_ins != insert_bases.len() || expected_del != del_len {
+            continue;
+        }
+
+        let upper_allele: Vec<u8> = allele.iter().map(|b| b.to_ascii_uppercase()).collect();
+
+        if allele_len >= ref_len {
+            for offset in 0..ref_len {
+                if let Some(read_base) = ref_to_read.get(&(genome_pos + offset)) {
+                    if *read_base != upper_allele[offset] {
+                        continue 'allele_check;
+                    }
+                } else {
+                    continue 'allele_check;
+                }
+            }
+
+            if expected_ins > 0 {
+                if upper_allele[ref_len..] != insert_bases {
+                    continue;
+                }
+            }
+        } else {
+            for offset in 0..allele_len {
+                if let Some(read_base) = ref_to_read.get(&(genome_pos + offset)) {
+                    if *read_base != upper_allele[offset] {
+                        continue 'allele_check;
+                    }
+                } else {
+                    continue 'allele_check;
+                }
+            }
+        }
+
+        return Some(allele_index);
+    }
+
+    None
+}
+
 fn frag_from_record(
     record: &bam::Record,
     snp_positions: &FxHashMap<GnPosition, SnpPosition>,
-    pos_allele_map: &FxHashMap<GnPosition, Vec<Genotype>>,
+    pos_allele_map: &FxHashMap<GnPosition, Vec<Vec<u8>>>,
     counter_id: usize,
 ) -> Frag {
     let first_in_pair_mask = 64;
@@ -683,45 +831,37 @@ fn frag_from_record(
     frag.first_pos_base = record.reference_start() as GnPosition;
     frag.last_pos_base = record.reference_end() as GnPosition;
 
+    let mut seen_pos = FxHashSet::default();
     for pair in aligned_pairs {
         if pair[1].is_none() {
             continue;
         }
         let genome_pos = pair[1].unwrap() as GnPosition;
+        if seen_pos.contains(&genome_pos) {
+            continue;
+        }
         if !snp_positions.contains_key(&genome_pos) {
             if !pair[0].is_none() {
                 _last_read_aligned_pos = pair[0].unwrap() as GnPosition;
             }
             continue;
-        } else {
-            //Deletion
-            if pair[0].is_none() {
-            } else {
-                let seq_pos = pair[0].unwrap() as GnPosition;
-                let readbase = record.seq()[seq_pos] as Genotype;
-                for (i, allele) in pos_allele_map
-                    .get(&(genome_pos))
-                    .unwrap()
-                    .iter()
-                    .enumerate()
-                {
-                    if readbase == *allele {
-                        let snp_pos = snp_positions[&genome_pos] as SnpPosition;
-                        frag.seq_dict.insert(snp_pos, i as Genotype);
-                        frag.qual_dict.insert(snp_pos, record.qual()[seq_pos]);
-                        if snp_pos < frag.first_position {
-                            frag.first_position = snp_pos;
-                        }
-                        if snp_pos > frag.last_position {
-                            frag.last_position = snp_pos
-                        }
-                        //Long read assumption.
-                        frag.snp_pos_to_seq_pos
-                            .insert(snp_pos, (0, seq_pos + leading_hardclips as usize));
-                        break;
-                    }
-                }
+        }
+
+        let allele_vec = pos_allele_map.get(&genome_pos).unwrap();
+        if let Some(allele_index) = match_allele_for_record(record, genome_pos, allele_vec) {
+            let seq_pos = pair[0].unwrap() as GnPosition;
+            let snp_pos = snp_positions[&genome_pos] as SnpPosition;
+            frag.seq_dict.insert(snp_pos, allele_index as Genotype);
+            frag.qual_dict.insert(snp_pos, record.qual()[seq_pos]);
+            if snp_pos < frag.first_position {
+                frag.first_position = snp_pos;
             }
+            if snp_pos > frag.last_position {
+                frag.last_position = snp_pos
+            }
+            frag.snp_pos_to_seq_pos
+                .insert(snp_pos, (0, seq_pos + leading_hardclips as usize));
+            seen_pos.insert(genome_pos);
         }
     }
 
@@ -731,7 +871,11 @@ fn frag_from_record(
         .keys()
         .map(|x| *x)
         .collect::<FxHashSet<SnpPosition>>();
-    frag.qual_string[0] = record.qual().iter().map(|x| x.checked_add(33).unwrap_or(255)).collect();
+    frag.qual_string[0] = record
+        .qual()
+        .iter()
+        .map(|x| x.checked_add(33).unwrap_or(255))
+        .collect();
     return frag;
 }
 
@@ -745,10 +889,9 @@ pub fn get_contigs_to_phase(bam_file: &str) -> Vec<String> {
         .collect();
 }
 
-
-pub fn l_epsilon_auto_detect(bam_file: &str) -> (usize, f64){
+pub fn l_epsilon_auto_detect(bam_file: &str) -> (usize, f64) {
     let main_bam_opt = IndexedReader::from_path(bam_file);
-    if main_bam_opt.is_err(){
+    if main_bam_opt.is_err() {
         error!("Error opening bam file '{}'. It is either malformed, not present, or the index is not present.", bam_file);
         std::process::exit(1);
     }
@@ -757,29 +900,28 @@ pub fn l_epsilon_auto_detect(bam_file: &str) -> (usize, f64){
     let mut err_vec = vec![];
     let mut read_lengths = vec![];
     let stop = 1000;
-    for p in main_bam.pileup(){
-        if count % 1000 != 0{
+    for p in main_bam.pileup() {
+        if count % 1000 != 0 {
             count += 1;
             continue;
         }
         let pileup = p.unwrap();
         let mut most_base = 0.;
         let mut base_dict = FxHashMap::default();
-        for alignment in pileup.alignments(){
-            if !alignment.is_del() && !alignment.is_refskip(){
-
+        for alignment in pileup.alignments() {
+            if !alignment.is_del() && !alignment.is_refskip() {
                 let rec = alignment.record();
                 let flags = rec.flags();
                 let errors_mask = 1796;
                 let secondary_mask = 256;
                 //We can only get record for primary sequences
-                if flags & errors_mask > 0 || flags & secondary_mask > 0 || rec.seq().len() == 0{
+                if flags & errors_mask > 0 || flags & secondary_mask > 0 || rec.seq().len() == 0 {
                     continue;
                 }
                 read_lengths.push(rec.seq().len());
 
                 let readbase = rec.seq()[alignment.qpos().unwrap()];
-                //We don't use basequals here, otherwise it biases the error estimation weirdly. 
+                //We don't use basequals here, otherwise it biases the error estimation weirdly.
                 let _readbasequal = rec.qual()[alignment.qpos().unwrap()];
                 //*base_dict.entry(readbase).or_insert(0.) += 1. * (1. - 10_f32.powf((readbasequal) as f32 / -10.));
                 *base_dict.entry(readbase).or_insert(0.) += 1.;
@@ -787,34 +929,34 @@ pub fn l_epsilon_auto_detect(bam_file: &str) -> (usize, f64){
         }
 
         let mut total_c = 0.;
-        for val in base_dict.into_values(){
-            if val > most_base{
+        for val in base_dict.into_values() {
+            if val > most_base {
                 most_base = val;
             }
             total_c += val;
         }
-        if total_c < 5.{
-            continue
+        if total_c < 5. {
+            continue;
         }
         let other_bases = total_c - most_base;
         let err = other_bases as f64 / most_base as f64;
         err_vec.push(err);
-        if err_vec.len() >= stop && read_lengths.len() > 0{
+        if err_vec.len() >= stop && read_lengths.len() > 0 {
             break;
         }
-        count +=1;
+        count += 1;
     }
     read_lengths.sort();
-    if read_lengths.len() == 0{
+    if read_lengths.len() == 0 {
         warn!("Parameter estimator for -l and -e failed. Assuming short-reads and returning -l 500 and -e 0.01. WARNING: If using long-reads, make sure to change this!");
         return (500, 0.01);
     }
     let q_33 = read_lengths[read_lengths.len() * 33 / 100];
     let q_50 = read_lengths[read_lengths.len() * 50 / 100];
     let q_66 = read_lengths[read_lengths.len() * 66 / 100];
-    err_vec.sort_by(|x,y| x.partial_cmp(&y).unwrap());
+    err_vec.sort_by(|x, y| x.partial_cmp(&y).unwrap());
     //let med = err_vec[err_vec.len() * 50 /100];
-    let med66 = err_vec[err_vec.len() * 66 /100];
+    let med66 = err_vec[err_vec.len() * 66 / 100];
     //let eps_guess = err_vec.into_iter().sum::<f64>() as f64 / stop as f64;
     //log::info!("{}-{} estimated epsilon mean (TESTING TODO)",eps_guess,eps_guess * (1.5 - eps_guess * 100. * (0.5/5.)));
     let final_eps = f64::max(med66, 0.01);
