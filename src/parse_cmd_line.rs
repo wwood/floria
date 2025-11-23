@@ -1,38 +1,40 @@
-use clap::ArgMatches;
 use crate::constants::*;
+use crate::file_reader;
+use crate::types_structs::Options;
+use clap::ArgMatches;
+use log::*;
 use std::env;
 use std::fs::File;
-use log::*;
 use std::io::Write;
 use std::path::Path;
-use crate::types_structs::Options;
-use crate::file_reader;
 
-pub fn parse_cmd_line(matches : ArgMatches) -> Options{
+pub fn parse_cmd_line(matches: ArgMatches) -> Options {
     // Set up our logger if the user passed the debug flag
     if matches.is_present("trace") {
         simple_logger::SimpleLogger::new()
             .with_level(log::LevelFilter::Trace)
             .init()
             .unwrap();
-    } else if matches.is_present("debug"){
+    } else if matches.is_present("debug") {
         simple_logger::SimpleLogger::new()
             .with_level(log::LevelFilter::Debug)
             .init()
             .unwrap();
-    }
-    else{
+    } else {
         simple_logger::SimpleLogger::new()
             .with_level(log::LevelFilter::Info)
             .init()
             .unwrap();
     }
 
-
     let overwrite = matches.is_present("overwrite");
     //Parse command line args.
     let max_number_solns_str = matches.value_of("max_number_solns").unwrap_or("10");
-    let supp_aln_dist_cutoff = matches.value_of("supp_aln_dist_cutoff").unwrap_or("40000").parse::<i64>().unwrap();
+    let supp_aln_dist_cutoff = matches
+        .value_of("supp_aln_dist_cutoff")
+        .unwrap_or("40000")
+        .parse::<i64>()
+        .unwrap();
     let max_number_solns = max_number_solns_str.parse::<usize>().unwrap();
     let num_t_str = matches.value_of("threads").unwrap_or("10");
     let num_threads = match num_t_str.parse::<usize>() {
@@ -40,7 +42,11 @@ pub fn parse_cmd_line(matches : ArgMatches) -> Options{
         Err(_) => panic!("Number of threads must be positive integer"),
     };
 
-    let max_ploidy = matches.value_of("max_ploidy").unwrap_or("5").parse::<usize>().unwrap();
+    let max_ploidy = matches
+        .value_of("max_ploidy")
+        .unwrap_or("5")
+        .parse::<usize>()
+        .unwrap();
     let hybrid = matches.is_present("hybrid");
     let reassign_short = matches.is_present("reassign_short");
     let do_binning = matches.is_present("do_binning");
@@ -66,40 +72,47 @@ pub fn parse_cmd_line(matches : ArgMatches) -> Options{
     };
     let bam_file = bam_file.to_string();
 
-
     let epsilon;
     let block_length;
-    if !matches.is_present("epsilon") || !matches.is_present("bam_block_length"){
+    if !matches.is_present("epsilon") || !matches.is_present("bam_block_length") {
         let (est_block_len, est_epsilon) = file_reader::l_epsilon_auto_detect(&bam_file);
-        if !matches.is_present("epsilon"){
+        if !matches.is_present("epsilon") {
             epsilon = est_epsilon;
-        }
-        else{
+        } else {
             epsilon = matches.value_of("epsilon").unwrap().parse::<f64>().unwrap();
         }
-        if !matches.is_present("bam_block_length"){
+        if !matches.is_present("bam_block_length") {
             block_length = est_block_len;
+        } else {
+            block_length = matches
+                .value_of("bam_block_length")
+                .unwrap()
+                .parse::<usize>()
+                .unwrap();
         }
-        else{
-            block_length = matches.value_of("bam_block_length").unwrap().parse::<usize>().unwrap();
-        }
-    }
-    else {
+    } else {
         epsilon = matches.value_of("epsilon").unwrap().parse::<f64>().unwrap();
-        block_length = matches.value_of("bam_block_length").unwrap().parse::<usize>().unwrap();
+        block_length = matches
+            .value_of("bam_block_length")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
     }
 
-//    let mut epsilon = 0.04;
-//    if hybrid{
-//        epsilon = 0.03
-//    }
-//    if matches.is_present("epsilon"){
-//        epsilon = matches.value_of("epsilon").unwrap().parse::<f64>().unwrap();
-//    }
-//    let block_length = matches.value_of("bam_block_length").unwrap_or("15000");
-//    let block_length = block_length.parse::<usize>().unwrap();
+    //    let mut epsilon = 0.04;
+    //    if hybrid{
+    //        epsilon = 0.03
+    //    }
+    //    if matches.is_present("epsilon"){
+    //        epsilon = matches.value_of("epsilon").unwrap().parse::<f64>().unwrap();
+    //    }
+    //    let block_length = matches.value_of("bam_block_length").unwrap_or("15000");
+    //    let block_length = block_length.parse::<usize>().unwrap();
     //    let use_mec = matches.is_present("use_mec");
-    let reference_fasta = matches.value_of("reference_fasta").unwrap_or("").to_string();
+    let reference_fasta = matches
+        .value_of("reference_fasta")
+        .unwrap_or("")
+        .to_string();
     let dont_use_supp_aln = matches.is_present("dont use supplementary");
     let gzip = matches.is_present("gzip-reads");
     //If the user is splitting the bam file according to the output partition.
@@ -113,42 +126,42 @@ pub fn parse_cmd_line(matches : ArgMatches) -> Options{
         .parse::<f64>()
         .unwrap();
 
-    if Path::new(&out_dir).exists() && !overwrite{
+    if Path::new(&out_dir).exists() && !overwrite {
         error!("Output directory exists; output directory must not be an existing directory. Use --overwrite to overwrite existing directory.");
         std::process::exit(1);
     }
 
     std::fs::create_dir_all(&out_dir).unwrap();
-    let mut cmd_file =
-        File::create(format!("{}/cmd.log", out_dir)).expect("Can't create file");
+    let mut cmd_file = File::create(format!("{}/cmd.log", out_dir)).expect("Can't create file");
     for arg in env::args() {
         write!(cmd_file, "{} ", arg).unwrap();
     }
 
-    //Overwrite the contig_ploidy_info file. 
-    let mut all_ploidy_file = File::create(format!("{}/contig_ploidy_info.tsv", out_dir)).expect("Can't create file");
-    write!(
-        all_ploidy_file,
-        "{}",
-        CONTIG_PLOIDY_HEADER
-    )
-    .unwrap();
-
+    //Overwrite the contig_ploidy_info file.
+    let mut all_ploidy_file =
+        File::create(format!("{}/contig_ploidy_info.tsv", out_dir)).expect("Can't create file");
+    write!(all_ploidy_file, "{}", CONTIG_PLOIDY_HEADER).unwrap();
 
     //If the user is getting frag files from BAM and VCF.
 
     let vcf_file = matches.value_of("vcf").unwrap().to_string();
 
-    if !bam{
+    if !bam {
         panic!("Must input a BAM file.")
     }
 
-    let snp_count_filter = matches.value_of("snp_count_filter").unwrap_or("100").parse::<usize>().unwrap();
+    let snp_count_filter = matches
+        .value_of("snp_count_filter")
+        .unwrap_or("100")
+        .parse::<usize>()
+        .unwrap();
     let use_qual_scores = matches.is_present("use_qual_scores");
     let output_reads = matches.is_present("output reads");
-    let mapq_cutoff = matches.value_of("mapq_cutoff").unwrap_or("15").parse::<u8>().unwrap();
-    
-    
+    let mapq_cutoff = matches
+        .value_of("mapq_cutoff")
+        .unwrap_or("15")
+        .parse::<u8>()
+        .unwrap();
 
     rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
@@ -157,13 +170,17 @@ pub fn parse_cmd_line(matches : ArgMatches) -> Options{
 
     let stopping_heuristic = !matches.is_present("no stop heuristic");
     let ignore_monomorphic = matches.is_present("ignore monomorphic");
-    let ploidy_sensitivity = matches.value_of("ploidy sensitivity").unwrap_or("2").parse::<u8>().unwrap();
-    if !(ploidy_sensitivity >= 1 && ploidy_sensitivity <= 3){
+    let ploidy_sensitivity = matches
+        .value_of("ploidy sensitivity")
+        .unwrap_or("2")
+        .parse::<u8>()
+        .unwrap();
+    if !(ploidy_sensitivity >= 1 && ploidy_sensitivity <= 3) {
         log::error!("Ploidy sensitivty option must be between 1 and 3");
         std::process::exit(1);
     }
 
-    let opt = Options{
+    let opt = Options {
         bam_file,
         vcf_file,
         use_qual_scores,
@@ -190,7 +207,7 @@ pub fn parse_cmd_line(matches : ArgMatches) -> Options{
         num_threads,
         overwrite,
         ploidy_sensitivity,
-        supp_aln_dist_cutoff
+        supp_aln_dist_cutoff,
     };
     opt
 }

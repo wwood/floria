@@ -1,8 +1,8 @@
-use crate::types_structs::{HapNode, FlowUpVec};
+use crate::types_structs::{FlowUpVec, HapNode};
 //use std::fs::File;
 //use crate::constants;
 //use std::io::Write;
-use fxhash::{FxHashMap};
+use fxhash::FxHashMap;
 
 #[cfg(feature = "highs")]
 pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec {
@@ -142,23 +142,23 @@ pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec {
     let solved = pb.optimise(Sense::Minimise).solve();
     let solution = solved.get_solution();
 
-//    let mut file = File::create(format!("{}/graph.csv", glopp_out_dir)).expect("Can't create file");
-//    for i in 0..edge_to_nodes.len() {
-//        writeln!(
-//            file,
-//            "{},{}-{},{},{}-{},{},{}",
-//            &solution.columns()[i],
-//            hap_graph_vec[edge_to_nodes[i].0].column,
-//            hap_graph_vec[edge_to_nodes[i].0].row,
-//            edge_to_nodes[i].0,
-//            hap_graph_vec[edge_to_nodes[i].1].column,
-//            hap_graph_vec[edge_to_nodes[i].1].row,
-//            edge_to_nodes[i].1,
-//            ae[i]
-//        )
-//        .unwrap();
-//    }
-//    drop(file);
+    //    let mut file = File::create(format!("{}/graph.csv", glopp_out_dir)).expect("Can't create file");
+    //    for i in 0..edge_to_nodes.len() {
+    //        writeln!(
+    //            file,
+    //            "{},{}-{},{},{}-{},{},{}",
+    //            &solution.columns()[i],
+    //            hap_graph_vec[edge_to_nodes[i].0].column,
+    //            hap_graph_vec[edge_to_nodes[i].0].row,
+    //            edge_to_nodes[i].0,
+    //            hap_graph_vec[edge_to_nodes[i].1].column,
+    //            hap_graph_vec[edge_to_nodes[i].1].row,
+    //            edge_to_nodes[i].1,
+    //            ae[i]
+    //        )
+    //        .unwrap();
+    //    }
+    //    drop(file);
 
     //    let mut file = File::create(format!("{}/qp_graph.csv", glopp_out_dir)).expect("Can't create file");
     //    for i in 0..edge_to_nodes.len() {
@@ -193,8 +193,8 @@ pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec {
 }
 
 #[cfg(not(feature = "highs"))]
-pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec{
-    use minilp::{Problem, OptimizationDirection, ComparisonOp};
+pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec {
+    use minilp::{ComparisonOp, OptimizationDirection, Problem};
 
     // Maximize an objective function x + 2 * y of two variables x >= 0 and 0 <= y <= 3
     let mut problem = Problem::new(OptimizationDirection::Minimize);
@@ -203,7 +203,7 @@ pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec{
     //LP values
     let mut t = vec![];
     let mut x = vec![];
-    
+
     let mut hap_graph_vec = vec![];
     for hap_block in hap_graph.iter() {
         for hap_node in hap_block.iter() {
@@ -226,9 +226,8 @@ pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec{
     }
 
     for _i in 0..edge_to_nodes.len() {
-//        x.push(pb.add_column(0., 0..));
+        //        x.push(pb.add_column(0., 0..));
         x.push(problem.add_var(0., (0., f64::INFINITY)));
-
     }
     for _i in 0..edge_to_nodes.len() {
         t.push(problem.add_var(1., (0., f64::INFINITY)));
@@ -263,10 +262,9 @@ pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec{
                 }
 
                 //                dbg!(&constraint_row, &hap_node.in_edges);
-//                pb.add_row(..0, &constraint_row);
-//                pb.add_row(0.., &constraint_row);
+                //                pb.add_row(..0, &constraint_row);
+                //                pb.add_row(0.., &constraint_row);
                 problem.add_constraint(&constraint_row, ComparisonOp::Eq, 0.0);
-
             }
         }
     }
@@ -277,7 +275,7 @@ pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec{
     }
     let solution = problem.solve().unwrap();
     let mut flow_update_vec = vec![];
-    for (i,x_var) in x.iter().enumerate(){
+    for (i, x_var) in x.iter().enumerate() {
         let (node1_id, node2_id) = edge_to_nodes[i];
         let node1 = hap_graph_vec[node1_id];
         let node2 = hap_graph_vec[node2_id];
@@ -286,5 +284,4 @@ pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec{
     }
 
     return flow_update_vec;
-
 }

@@ -1,8 +1,8 @@
-use ordered_float::*;
-use derivative::Derivative;
-use debruijn::dna_string::DnaString;
 use crate::utils_frags;
+use debruijn::dna_string::DnaString;
+use derivative::Derivative;
 use fxhash::{FxHashMap, FxHashSet};
+use ordered_float::*;
 use rust_htslib::bam::Record;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
@@ -19,7 +19,7 @@ pub type FlowUpVec = Vec<((usize, usize), (usize, usize), f64)>;
 
 #[derive(Debug, Clone, Derivative)]
 #[derivative(Default)]
-pub struct Options{
+pub struct Options {
     pub bam_file: String,
     pub vcf_file: String,
     pub use_qual_scores: bool,
@@ -46,8 +46,8 @@ pub struct Options{
     pub num_threads: usize,
     pub overwrite: bool,
     pub ploidy_sensitivity: u8,
-    #[derivative(Default(value="40000"))]
-    pub supp_aln_dist_cutoff: i64
+    #[derivative(Default(value = "40000"))]
+    pub supp_aln_dist_cutoff: i64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -79,20 +79,22 @@ pub struct Frag {
     pub is_paired: bool,
     pub snp_pos_to_seq_pos: FxHashMap<SnpPosition, (u8, GnPosition)>,
     pub first_pos_base: GnPosition,
-    pub last_pos_base: GnPosition
-
-    
+    pub last_pos_base: GnPosition,
 }
 
-impl Ord for Frag{
+impl Ord for Frag {
     fn cmp(&self, other: &Frag) -> Ordering {
-        return (self.first_position,other.last_position,self.counter_id).cmp(&(other.first_position,self.last_position,other.counter_id));
-        //I tried the below ordering. Gives similar results. 
+        return (self.first_position, other.last_position, self.counter_id).cmp(&(
+            other.first_position,
+            self.last_position,
+            other.counter_id,
+        ));
+        //I tried the below ordering. Gives similar results.
         //return (self.first_position,other.seq_dict.len(),self.counter_id).cmp(&(other.first_position,self.seq_dict.len(),other.counter_id));
     }
 }
 
-impl PartialOrd for Frag{
+impl PartialOrd for Frag {
     fn partial_cmp(&self, other: &Frag) -> Option<Ordering> {
         Some(self.cmp(other))
     }
@@ -166,10 +168,13 @@ pub struct HapNode<'a> {
 }
 
 impl<'a> HapNode<'a> {
-    pub fn new(frag_set: FxHashSet<&'a Frag>, snp_endpoints: (SnpPosition, SnpPosition)) -> HapNode<'a> {
+    pub fn new(
+        frag_set: FxHashSet<&'a Frag>,
+        snp_endpoints: (SnpPosition, SnpPosition),
+    ) -> HapNode<'a> {
         let mut hap_map = FxHashMap::default();
         for frag in frag_set.iter() {
-            for pos in frag.seq_dict.keys(){
+            for pos in frag.seq_dict.keys() {
                 if *pos <= snp_endpoints.1 && *pos >= snp_endpoints.0 {
                     let var_at_pos = frag.seq_dict.get(pos).unwrap();
                     let sites = hap_map.entry(*pos).or_insert(FxHashMap::default());
@@ -369,7 +374,7 @@ pub fn build_truncated_hap_block(
         let var_at_pos = frag.seq_dict.get(pos).unwrap();
         let sites = block_vec[part].entry(*pos).or_insert(FxHashMap::default());
         let site_counter = sites.entry(*var_at_pos).or_insert(OrderedFloat(0.));
-        *site_counter += utils_frags::phred_scale(frag,pos);
+        *site_counter += utils_frags::phred_scale(frag, pos);
     }
 
     return (blocks_broken, HapBlock { blocks: block_vec });

@@ -1,6 +1,6 @@
-use crate::types_structs::{GenotypeCount};
+use crate::types_structs::GenotypeCount;
 use ordered_float::OrderedFloat;
-pub const NUM_ITER_OPTIMIZE:usize = 20;
+pub const NUM_ITER_OPTIMIZE: usize = 20;
 pub const MIN_SHARED_READS_UNAMBIG: f64 = 2.;
 pub const DIV_FACTOR: f64 = 0.25;
 pub const PROB_CUTOFF: f64 = 0.01;

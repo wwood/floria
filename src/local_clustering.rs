@@ -1,11 +1,10 @@
 use crate::types_structs::{Frag, HapBlock, GAP_CHAR};
-use crate::types_structs::{GenotypeCount, SnpPosition, Genotype};
+use crate::types_structs::{Genotype, GenotypeCount, SnpPosition};
 use ordered_float::OrderedFloat;
 //use rand::rng::Rng;
 extern crate time;
 use crate::utils_frags;
-use fxhash::{FxHashSet};
-
+use fxhash::FxHashSet;
 
 //Return the set of reads for which every read covers at least one position in the interval
 //(inclusive)

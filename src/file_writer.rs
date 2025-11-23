@@ -1,9 +1,9 @@
 use crate::constants;
-use bio::io::fasta::{IndexedReader as FastaIndexedReader};
 use crate::part_block_manip;
 use crate::types_structs::*;
 use crate::utils_frags;
 use bio::alphabets::dna::revcomp;
+use bio::io::fasta::IndexedReader as FastaIndexedReader;
 use bio::io::fastq;
 use bio::io::fastq::Writer;
 use debruijn::*;
@@ -49,7 +49,7 @@ pub fn write_outputs(
         &rel_err,
         &options.out_dir,
         avg_err,
-        contig_len
+        contig_len,
     );
     write_all_parts_file(
         part,
@@ -61,10 +61,7 @@ pub fn write_outputs(
         &hapqs,
         &rel_err,
     );
-    write_nosnp_reads_parts(
-        &out_bam_part_dir,
-        &snpless_frags,
-    );
+    write_nosnp_reads_parts(&out_bam_part_dir, &snpless_frags);
     if options.output_reads {
         write_reads(
             part,
@@ -74,16 +71,11 @@ pub fn write_outputs(
             &hapqs,
             gzip,
         );
-        write_nosnp_reads(
-            &out_bam_part_dir,
-            &snpless_frags,
-            gzip,
-        );
-
+        write_nosnp_reads(&out_bam_part_dir, &snpless_frags, gzip);
     }
 }
 
-fn write_nosnp_reads(out_bam_part_dir: &str, snpless_frags:&Vec<&Frag>, gzip: bool){
+fn write_nosnp_reads(out_bam_part_dir: &str, snpless_frags: &Vec<&Frag>, gzip: bool) {
     let gz = if gzip { ".gz" } else { "" };
     let part_fastq_reads = format!("{}/long_reads/snpless.fastq{}", out_bam_part_dir, gz);
     let part_fastq_reads_paired1 = format!(
@@ -124,45 +116,51 @@ fn write_nosnp_reads(out_bam_part_dir: &str, snpless_frags:&Vec<&Frag>, gzip: bo
         fastq_writer_paired2 = fastq::Writer::new(enc2);
     }
 
-    for frag in snpless_frags{
-        if frag.is_paired{
+    for frag in snpless_frags {
+        if frag.is_paired {
             paired_written = true;
             write_paired_reads_no_trim(&mut fastq_writer_paired1, &mut fastq_writer_paired2, &frag);
-        }
-        else{
+        } else {
             single_end_written = true;
-            if frag.seq_string[0].len() == 0{
-                fastq_writer.write(&format!("{}",frag.id), None, &vec![78], &vec![33]).unwrap();
-            }
-            else{
-                fastq_writer.write(&format!("{}",frag.id), None, &frag.seq_string[0].to_ascii_vec(), &frag.qual_string[0]).unwrap();
+            if frag.seq_string[0].len() == 0 {
+                fastq_writer
+                    .write(&format!("{}", frag.id), None, &vec![78], &vec![33])
+                    .unwrap();
+            } else {
+                fastq_writer
+                    .write(
+                        &format!("{}", frag.id),
+                        None,
+                        &frag.seq_string[0].to_ascii_vec(),
+                        &frag.qual_string[0],
+                    )
+                    .unwrap();
             }
         }
     }
-    if !paired_written{
+    if !paired_written {
         fs::remove_file(&part_fastq_reads_paired1).unwrap();
         fs::remove_file(&part_fastq_reads_paired2).unwrap();
     }
-    if !single_end_written{
+    if !single_end_written {
         fs::remove_file(&part_fastq_reads).unwrap();
     }
 }
 
-fn write_nosnp_reads_parts(out_bam_part_dir: &str, snpless_frags:&Vec<&Frag>){
+fn write_nosnp_reads_parts(out_bam_part_dir: &str, snpless_frags: &Vec<&Frag>) {
     let part_path = &format!("{}/reads_without_snps.tsv", out_bam_part_dir);
     let file = File::create(part_path).expect("Can't create file");
 
     let mut file = LineWriter::new(file);
 
     write!(file, "READ_NAME\tREAD_LENGTH_IN_BASES\n").unwrap();
-    for frag in snpless_frags{
+    for frag in snpless_frags {
         let mut len = 0;
-        for dna_string in frag.seq_string.iter(){
+        for dna_string in frag.seq_string.iter() {
             len += dna_string.len();
         }
         write!(file, "{}\t{}\n", &frag.id, len).unwrap();
     }
-
 }
 
 fn write_paired_reads_no_trim<W: Write>(
@@ -314,10 +312,12 @@ fn write_fragset_haplotypes(
     left_snp_pos: SnpPosition,
     right_snp_pos: SnpPosition,
 ) -> Vec<u8> {
-    
     let hap_map = utils_frags::set_to_seq_dict(&frags, false);
     let emptydict = FxHashMap::default();
-    let title_string = format!(">HAP{}.{}\tSNPRANGE:{}-{}\n", name, dir, left_snp_pos, right_snp_pos);
+    let title_string = format!(
+        ">HAP{}.{}\tSNPRANGE:{}-{}\n",
+        name, dir, left_snp_pos, right_snp_pos
+    );
     write!(file, "{}", title_string).unwrap();
     let positions: Vec<&SnpPosition> = hap_map.keys().collect();
     if positions.len() == 0 {
@@ -565,11 +565,11 @@ fn write_reads(
             }
         }
 
-        if !paired_written{
+        if !paired_written {
             fs::remove_file(&part_fastq_reads_paired1).unwrap();
             fs::remove_file(&part_fastq_reads_paired2).unwrap();
         }
-        if !single_end_written{
+        if !single_end_written {
             fs::remove_file(&part_fastq_reads).unwrap();
         }
     }
@@ -709,7 +709,7 @@ fn write_haplotypes(
     contig_len: usize,
 ) -> FxHashMap<usize, u8> {
     let vartig_file = format!("{}/{}.vartigs", out_bam_part_dir, contig);
-//    let ploidy_file = format!("{}/ploidy_info.tsv", out_bam_part_dir);
+    //    let ploidy_file = format!("{}/ploidy_info.tsv", out_bam_part_dir);
     let top_ploidy_file = format!("{}/contig_ploidy_info.tsv", top_dir);
     let mut longest_vartig_bases = 0;
 
@@ -717,15 +717,13 @@ fn write_haplotypes(
     let mut coverage_count = vec![0.; snp_pos_to_genome_pos.len()];
 
     let mut snp_covered_count_geq15 = vec![0.; snp_pos_to_genome_pos.len()];
-    let mut coverage_count_geq15= vec![0.; snp_pos_to_genome_pos.len()];
+    let mut coverage_count_geq15 = vec![0.; snp_pos_to_genome_pos.len()];
 
     let mut snp_covered_count_geq30 = vec![0.; snp_pos_to_genome_pos.len()];
     let mut coverage_count_geq30 = vec![0.; snp_pos_to_genome_pos.len()];
 
     let mut snp_covered_count_geq45 = vec![0.; snp_pos_to_genome_pos.len()];
     let mut coverage_count_geq45 = vec![0.; snp_pos_to_genome_pos.len()];
-
-
 
     let mut hapQ_scores = FxHashMap::default();
     let mut total_bases_covered = 0;
@@ -744,7 +742,6 @@ fn write_haplotypes(
         .truncate(true)
         .open(&vartig_info_str)
         .unwrap();
-
 
     for (i, set) in part.iter().enumerate() {
         if set.is_empty() {
@@ -783,14 +780,14 @@ fn write_haplotypes(
                 }
             }
 
-            if hap_q >= 30{
+            if hap_q >= 30 {
                 for i in left_snp_pos..right_snp_pos + 1 {
                     snp_covered_count_geq30[(i - 1) as usize] += 1.;
                     coverage_count_geq30[(i - 1) as usize] += cov
                 }
             }
 
-            if hap_q >= 45{
+            if hap_q >= 45 {
                 for i in left_snp_pos..right_snp_pos + 1 {
                     snp_covered_count_geq45[(i - 1) as usize] += 1.;
                     coverage_count_geq45[(i - 1) as usize] += cov
@@ -838,12 +835,12 @@ fn write_haplotypes(
         }
     }
 
-//    let mut ploidy_file = OpenOptions::new()
-//        .write(true)
-//        .truncate(true)
-//        .create(true)
-//        .open(ploidy_file)
-//        .unwrap();
+    //    let mut ploidy_file = OpenOptions::new()
+    //        .write(true)
+    //        .truncate(true)
+    //        .create(true)
+    //        .open(ploidy_file)
+    //        .unwrap();
 
     let mut top_ploidy_file = OpenOptions::new()
         .write(true)
@@ -865,7 +862,8 @@ fn write_haplotypes(
         .len();
 
     let _avg_local_ploidy = snp_covered_count.iter().sum::<f64>() / num_nonzero as f64;
-    let _avg_local_ploidy_geq15 = snp_covered_count_geq15.iter().sum::<f64>() / num_nonzero_geq15 as f64;
+    let _avg_local_ploidy_geq15 =
+        snp_covered_count_geq15.iter().sum::<f64>() / num_nonzero_geq15 as f64;
     let avg_global_ploidy = snp_covered_count.iter().sum::<f64>() / snp_covered_count.len() as f64;
     let avg_global_ploidy_geq15 =
         snp_covered_count_geq15.iter().sum::<f64>() / snp_covered_count_geq15.len() as f64;
@@ -875,28 +873,27 @@ fn write_haplotypes(
     let avg_global_ploidy_geq45 =
         snp_covered_count_geq45.iter().sum::<f64>() / snp_covered_count_geq45.len() as f64;
 
-
     //let avg_global_ploidy = total_bases_covered /
     let rough_cvg = coverage_count.iter().sum::<f64>() / num_nonzero as f64;
-//    write!(
-//        ploidy_file,
-//        "contig\taverage_local_ploidy\taverage_global_ploidy\tapproximate_coverage_ignoring_indels\ttotal_vartig_bases_covered\taverage_local_ploidy_min1hapq\taverage_global_ploidy_min1hapq\tavg_err\n",
-//    )
-//    .unwrap();
-//
-//    write!(
-//        ploidy_file,
-//        "{}\t{:.3}\t{:.3}\t{:.3}\t{}\t{:.3}\t{:.3}\t{:.4}\n",
-//        contig,
-//        avg_local_ploidy,
-//        avg_global_ploidy,
-//        rough_cvg,
-//        total_bases_covered,
-//        avg_local_ploidy_g0,
-//        avg_global_ploidy_g0,
-//        avg_err
-//    )
-//    .unwrap();
+    //    write!(
+    //        ploidy_file,
+    //        "contig\taverage_local_ploidy\taverage_global_ploidy\tapproximate_coverage_ignoring_indels\ttotal_vartig_bases_covered\taverage_local_ploidy_min1hapq\taverage_global_ploidy_min1hapq\tavg_err\n",
+    //    )
+    //    .unwrap();
+    //
+    //    write!(
+    //        ploidy_file,
+    //        "{}\t{:.3}\t{:.3}\t{:.3}\t{}\t{:.3}\t{:.3}\t{:.4}\n",
+    //        contig,
+    //        avg_local_ploidy,
+    //        avg_global_ploidy,
+    //        rough_cvg,
+    //        total_bases_covered,
+    //        avg_local_ploidy_g0,
+    //        avg_global_ploidy_g0,
+    //        avg_err
+    //    )
+    //    .unwrap();
 
     write!(
         top_ploidy_file,
@@ -1035,14 +1032,14 @@ pub fn write_alignment_as_vartig(
     snp_pos_to_genome_pos: &Vec<GnPosition>,
     left_snp_pos: SnpPosition,
     right_snp_pos: SnpPosition,
-    out: &str
+    out: &str,
 ) {
     let set_frag = frags.iter().collect();
     let hap_map = utils_frags::set_to_seq_dict(&set_frag, false);
     let emptydict = FxHashMap::default();
     let mut vec_of_alleles = vec![];
-    let rightmost_base = snp_pos_to_genome_pos[(right_snp_pos-1) as usize];
-    let leftmost_base = snp_pos_to_genome_pos[(left_snp_pos-1) as usize];
+    let rightmost_base = snp_pos_to_genome_pos[(right_snp_pos - 1) as usize];
+    let leftmost_base = snp_pos_to_genome_pos[(left_snp_pos - 1) as usize];
     for pos in left_snp_pos..right_snp_pos + 1 {
         let allele_map = hap_map.get(&pos).unwrap_or(&emptydict);
         if *allele_map == emptydict {
@@ -1053,7 +1050,10 @@ pub fn write_alignment_as_vartig(
             vec_of_alleles.push(*best_allele as u8);
         }
     }
-    let hap_header = format!(">HAP{}\tCONTIG:{}\tSNPRANGE:{}-{}\tBASERANGE:{}-{}\n", in_file, contig, left_snp_pos, right_snp_pos,  leftmost_base, rightmost_base);
+    let hap_header = format!(
+        ">HAP{}\tCONTIG:{}\tSNPRANGE:{}-{}\tBASERANGE:{}-{}\n",
+        in_file, contig, left_snp_pos, right_snp_pos, leftmost_base, rightmost_base
+    );
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
@@ -1073,5 +1073,4 @@ pub fn write_alignment_as_vartig(
         .unwrap()
     )
     .unwrap();
-
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 extern crate time;
 use clap::{AppSettings, Arg, Command};
 use floria::file_reader;
@@ -383,7 +385,7 @@ fn main() {
                 &snp_to_genome_pos,
                 &options,
                 &snpless_frags_between_gaps,
-                &mut chrom_seqs.as_mut().unwrap()
+                &mut chrom_seqs.as_mut().unwrap(),
             );
         }
     }

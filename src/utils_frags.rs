@@ -8,9 +8,9 @@ use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 use statrs::distribution::ChiSquared;
 use statrs::distribution::ContinuousCDF;
+use std::mem;
 use std::sync::Mutex;
 use std::time::Instant;
-use std::mem;
 
 // Get the number # of different bases between the
 // two fragments
@@ -48,7 +48,7 @@ pub fn distance_read_haplo_epsilon_empty(r: &Frag, hap: &Haplotype, epsilon: f64
         }
 
         //Can speed this up by storing the consensus var in Haplotype
-        //without need to recompute everytime. 
+        //without need to recompute everytime.
         let frag_var = r.seq_dict.get(pos).unwrap();
         let consensus_var = hap
             .get(pos)
@@ -229,7 +229,6 @@ pub fn stable_binom_cdf_p_rev(n: usize, k: usize, p: f64, div_factor: f64) -> f6
         //Get a NaN error if we only have errors -- which can happen if we use polishing.
         a = 0.0000001;
     }
-    
 
     let mut rel_ent = a * (a / p).ln() + (1.0 - a) * ((1.0 - a) / (1.0 - p)).ln();
 
@@ -421,8 +420,12 @@ pub fn get_range_with_lengths(
             return_vec.push((left_endpoint, i));
             break;
         }
-        if *pos < last_pos{
-            log::error!("VCF malformed. Positions are not increasing {} {}", last_pos, *pos);
+        if *pos < last_pos {
+            log::error!(
+                "VCF malformed. Positions are not increasing {} {}",
+                last_pos,
+                *pos
+            );
             std::process::exit(1);
         }
         cum_pos += *pos - last_pos;
@@ -639,10 +642,9 @@ pub fn get_errors_cov_from_frags(
         //Mean
         else {
             //cov = *snp_counter_list.iter().sum::<GenotypeCount>() / snp_counter_list.len() as f64;
-            if snp_nonzero.len() > 0{
+            if snp_nonzero.len() > 0 {
                 cov = *snp_counter_list.iter().sum::<GenotypeCount>() / snp_nonzero.len() as f64;
-            }
-            else{
+            } else {
                 cov = 0.;
             }
         }
@@ -768,5 +770,4 @@ pub fn remove_monomorphic_allele(mut frags: Vec<Frag>, error: f64) -> Vec<Frag> 
     }
 
     return new_frags;
-
 }

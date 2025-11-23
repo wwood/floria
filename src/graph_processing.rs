@@ -1,13 +1,15 @@
 use crate::constants;
-use log::Level::{Debug, Trace};
-use log::{log_enabled};
 use crate::file_writer;
 use crate::global_clustering;
 use crate::local_clustering;
 use crate::part_block_manip;
-use crate::types_structs::{Frag, GnPosition, HapNode, SnpPosition, TraceBackNode, VcfProfile, Options, FlowUpVec};
+use crate::types_structs::{
+    FlowUpVec, Frag, GnPosition, HapNode, Options, SnpPosition, TraceBackNode, VcfProfile,
+};
 use crate::utils_frags;
 use fxhash::{FxHashMap, FxHashSet};
+use log::log_enabled;
+use log::Level::{Debug, Trace};
 use rayon::prelude::*;
 use std::sync::Mutex;
 //use osqp::{CscMatrix, Problem, Settings};
@@ -17,7 +19,6 @@ use petgraph::prelude::*;
 use std::fs::File;
 use std::io::Write;
 use std::mem;
-
 
 fn update_hap_graph(hap_graph: &mut Vec<Vec<HapNode>>) {
     //    let pseudo_count = 10.;
@@ -99,14 +100,13 @@ fn update_hap_graph(hap_graph: &mut Vec<Vec<HapNode>>) {
     }
 }
 
-
 fn get_local_hap_blocks<'a>(
     all_frags: &'a Vec<Frag>,
     snp_to_genome_pos: &'a Vec<GnPosition>,
     floria_out_dir: &str,
     j: usize,
     snp_range_vec: &Vec<(SnpPosition, SnpPosition)>,
-    options: &Options
+    options: &Options,
 ) -> Option<Vec<Vec<HapNode<'a>>>> {
     let max_ploidy = options.max_ploidy;
     let epsilon = options.epsilon;
@@ -154,7 +154,7 @@ fn get_local_hap_blocks<'a>(
             local_clustering::optimize_clustering(part, epsilon, constants::NUM_ITER_OPTIMIZE);
 
         let binom_vec = local_clustering::get_mec_stats_epsilon_no_phred(&optimized_part, epsilon);
-//        let binom_vec = local_clustering::get_mec_stats_epsilon_yes_phred(&optimized_part, epsilon);
+        //        let binom_vec = local_clustering::get_mec_stats_epsilon_yes_phred(&optimized_part, epsilon);
         for (good, bad) in binom_vec {
             mec_vector[ploidy - ploidy_start] += bad;
             num_alleles += good;
@@ -163,7 +163,7 @@ fn get_local_hap_blocks<'a>(
 
         let split_part_merge;
         let split_part_endpoints;
-        if constants::WEIRD_SPLIT{
+        if constants::WEIRD_SPLIT {
             let split_part =
                 utils_frags::split_part_using_breaks(&break_pos, &optimized_part, &all_frags);
             let endpoints;
@@ -175,8 +175,7 @@ fn get_local_hap_blocks<'a>(
             let merge_result = merge_split_parts(split_part, break_pos, endpoints);
             split_part_merge = merge_result.0;
             split_part_endpoints = merge_result.1;
-        }
-        else{
+        } else {
             split_part_merge = vec![optimized_part];
             split_part_endpoints = vec![snp_range_vec[j]];
         }
@@ -203,22 +202,20 @@ fn get_local_hap_blocks<'a>(
             //                expected_errors_ref
             //            );
             let mec_threshold;
-            if options.ploidy_sensitivity == 1{
-                mec_threshold =
-                1.0 / (1.0 - epsilon) / (1.0 + 1.0 / ((ploidy as f64).powf(0.50) + 1.00) as f64);
-
-            }
-            else if options.ploidy_sensitivity == 2{
-//                mec_threshold =
-//                1.0 / (1.0 - epsilon) / (1.0 + 1.0 / ((ploidy as f64).powf(0.75) + 1.32) as f64);
-                mec_threshold =
-                1.0 / (1.0 - epsilon) / (1.0 + 1.0 / ((ploidy as f64).powf(1.00) + 1./3.) as f64);
-
-            }
-            else{
-                mec_threshold =
-                1.0 / (1.0 - epsilon) / (1.0 + 1.0 / ((ploidy as f64).powf(1.00) + 1.00) as f64);
-
+            if options.ploidy_sensitivity == 1 {
+                mec_threshold = 1.0
+                    / (1.0 - epsilon)
+                    / (1.0 + 1.0 / ((ploidy as f64).powf(0.50) + 1.00) as f64);
+            } else if options.ploidy_sensitivity == 2 {
+                //                mec_threshold =
+                //                1.0 / (1.0 - epsilon) / (1.0 + 1.0 / ((ploidy as f64).powf(0.75) + 1.32) as f64);
+                mec_threshold = 1.0
+                    / (1.0 - epsilon)
+                    / (1.0 + 1.0 / ((ploidy as f64).powf(1.00) + 1. / 3.) as f64);
+            } else {
+                mec_threshold = 1.0
+                    / (1.0 - epsilon)
+                    / (1.0 + 1.0 / ((ploidy as f64).powf(1.00) + 1.00) as f64);
             }
             log::trace!(
                 "Expected MEC ratio {}, observed MEC ratio {}",
@@ -231,9 +228,8 @@ fn get_local_hap_blocks<'a>(
                 < mec_threshold
             {
                 //do nothing
-            } 
-            else{
-                if options.stopping_heuristic{
+            } else {
+                if options.stopping_heuristic {
                     log::trace!("MEC decrease thereshold, returning ploidy {}.", ploidy - 1);
                     best_ploidy -= 1;
                     break;
@@ -251,7 +247,7 @@ fn get_local_hap_blocks<'a>(
         }
     }
 
-    if best_ploidy == max_ploidy{
+    if best_ploidy == max_ploidy {
         log::debug!("Max ploidy {} reached at SNPs {:?} . Consider increasing the maximum ploidy (-p option)",max_ploidy, &snp_range_vec[j]);
     }
 
@@ -286,7 +282,7 @@ fn get_local_hap_blocks<'a>(
         }
         hap_node_blocks.push(hap_node_block);
 
-        if log_enabled!(Debug) || log_enabled!(Trace){
+        if log_enabled!(Debug) || log_enabled!(Trace) {
             file_writer::write_all_parts_file(
                 &frag_best_part,
                 "",
@@ -473,7 +469,7 @@ pub fn get_disjoint_paths_rewrite<'a>(
     //Update the graph to include flows.
     for (n1_inf, n2_inf, flow) in flow_update_vec {
         //if flow < constants::FLOW_CUTOFF_MULT * options.epsilon {
-        if flow < constants::MIN_SHARED_READS_UNAMBIG{
+        if flow < constants::MIN_SHARED_READS_UNAMBIG {
             continue;
         }
         hap_graph[n1_inf.0][n1_inf.1]
@@ -536,7 +532,7 @@ pub fn get_disjoint_paths_rewrite<'a>(
         };
     }
 
-    if log_enabled!(Debug) || log_enabled!(Trace){
+    if log_enabled!(Debug) || log_enabled!(Trace) {
         let mut pet_graph_file =
             File::create(format!("{}/pet_graph.dot", floria_out_dir)).expect("Can't create file");
         write!(pet_graph_file, "{:?}", Dot::new(&hap_petgraph)).unwrap();
@@ -721,15 +717,15 @@ pub fn get_disjoint_paths_rewrite<'a>(
     }
 
     log::debug!("Number of haplogroups/disjoint paths: {}", best_paths.len());
-//    let glopp_out_dir_copy = glopp_out_dir.clone();
-//    let mut path_debug_file =
-//        File::create(format!("{}/debug_paths.txt", glopp_out_dir_copy)).expect("Can't create file");
-//    for (i, path) in best_pathscolrow.iter().enumerate() {
-//        writeln!(path_debug_file, "{}", i).unwrap();
-//        writeln!(path_debug_file, "{:?}", path).unwrap();
-//        //        writeln!(path_debug_file, "{:?}", path_parts_snps_endpoints_copy[i]).unwrap();
-//        writeln!(path_debug_file, "{:?}", cov_of_haplogroups[i]).unwrap();
-//    }
+    //    let glopp_out_dir_copy = glopp_out_dir.clone();
+    //    let mut path_debug_file =
+    //        File::create(format!("{}/debug_paths.txt", glopp_out_dir_copy)).expect("Can't create file");
+    //    for (i, path) in best_pathscolrow.iter().enumerate() {
+    //        writeln!(path_debug_file, "{}", i).unwrap();
+    //        writeln!(path_debug_file, "{:?}", path).unwrap();
+    //        //        writeln!(path_debug_file, "{:?}", path_parts_snps_endpoints_copy[i]).unwrap();
+    //        writeln!(path_debug_file, "{:?}", cov_of_haplogroups[i]).unwrap();
+    //    }
 
     //Put read into best haplotig.
     if do_binning {

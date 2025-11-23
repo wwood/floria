@@ -1,3 +1,5 @@
+#![allow(clippy::all, noop_method_call)]
+
 extern crate time;
 use clap::{App, AppSettings, Arg};
 use floria::file_reader;
@@ -36,8 +38,7 @@ fn main() {
     let contigs_to_phase = file_reader::get_contigs_to_phase(&bam_file);
 
     let vcf_file = matches.value_of("vcf").unwrap();
-    let snp_to_genome_pos_t =
-        file_reader::get_genotypes_from_vcf_hts(vcf_file.clone());
+    let snp_to_genome_pos_t = file_reader::get_genotypes_from_vcf_hts(vcf_file.clone());
     let snp_to_genome_pos_map = snp_to_genome_pos_t;
     let vcf_profile = file_reader::get_vcf_profile(&vcf_file, &contigs_to_phase);
 
@@ -48,9 +49,24 @@ fn main() {
 
     let (mut main_bam, mut short_bam) = file_reader::get_bam_readers(&options);
     let mut chrom_seqs = None;
-    for contig in contigs_to_phase.iter(){
-        let (mut all_frags,_) = file_reader::get_frags_from_bamvcf_rewrite(&mut main_bam, &mut short_bam, &vcf_profile, &options, &mut chrom_seqs, &contig );
+    for contig in contigs_to_phase.iter() {
+        let (mut all_frags, _) = file_reader::get_frags_from_bamvcf_rewrite(
+            &mut main_bam,
+            &mut short_bam,
+            &vcf_profile,
+            &options,
+            &mut chrom_seqs,
+            &contig,
+        );
         all_frags.sort_by(|a, b| a.first_position.cmp(&b.first_position));
-        file_writer::write_alignment_as_vartig(&all_frags, output_frag_str, contig, &snp_to_genome_pos_map[contig], 1, snp_to_genome_pos_map[contig].len() as SnpPosition, output_frag_str);
-   }
+        file_writer::write_alignment_as_vartig(
+            &all_frags,
+            output_frag_str,
+            contig,
+            &snp_to_genome_pos_map[contig],
+            1,
+            snp_to_genome_pos_map[contig].len() as SnpPosition,
+            output_frag_str,
+        );
+    }
 }
