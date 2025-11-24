@@ -20,7 +20,7 @@ pub fn beam_search_phasing<'a>(
     FxHashMap<SnpPosition, FxHashSet<usize>>,
     Vec<FxHashSet<&'a Frag>>,
 ) {
-    if all_reads.len() == 0 {
+    if all_reads.is_empty() {
         return (FxHashMap::default(), vec![]);
     }
     let mut partition = clique.clone();
@@ -31,7 +31,7 @@ pub fn beam_search_phasing<'a>(
 
     let starting_freq = vec![1; clique.len()];
     let first_node = SearchNode {
-        read: &random_frag,
+        read: random_frag,
         part: usize::MAX,
         score: 0.0,
         freqs: starting_freq,
@@ -50,8 +50,7 @@ pub fn beam_search_phasing<'a>(
         let mut max_num_soln_mut = max_number_solns;
         if i < 25 {
             max_num_soln_mut = ploidy * max_number_solns;
-        } else {
-        }
+        } 
         //        let mut search_node_list_next = vec![];
         let mut search_node_heap_next: BinaryHeap<(Rc<SearchNode>, HapBlock)> = BinaryHeap::new();
         let frag = &all_reads[i];
@@ -71,13 +70,13 @@ pub fn beam_search_phasing<'a>(
             let mut p_value_list = vec![];
             //            let mut same_diff_list = vec![];
             for part_index in 0..ploidy {
-                let dist;
+                
                 let (same, diff) = utils_frags::distance_read_haplo_epsilon_empty(
                     frag,
                     &block.blocks[part_index],
                     epsilon,
                 );
-                dist = 1.0
+                let dist = 1.0
                     * utils_frags::stable_binom_cdf_p_rev(
                         (same + diff) as usize,
                         diff as usize,
@@ -100,8 +99,8 @@ pub fn beam_search_phasing<'a>(
                     //iterative sum of p-values as well.
                     let (score, new_error_vec) =
                         read_to_node_value(node, frag, block, j, epsilon, div_factor, use_mec);
-                    let new_node_score;
-                    new_node_score = -score;
+                    
+                    let new_node_score = -score;
 
                     let mut new_node = types_structs::build_child_node(
                         frag,
@@ -152,7 +151,7 @@ pub fn beam_search_phasing<'a>(
     let mut break_positions = FxHashMap::default();
     loop {
         let current_pos = node_pointer.current_pos;
-        if node_pointer.broken_blocks.len() > 0 {
+        if !node_pointer.broken_blocks.is_empty() {
             let haps_to_break = break_positions
                 .entry(current_pos)
                 .or_insert(FxHashSet::default());
@@ -173,7 +172,7 @@ pub fn beam_search_phasing<'a>(
         }
     }
     //dbg!(break_positions);
-    return (break_positions, partition);
+    (break_positions, partition)
 }
 
 fn read_to_node_value(
@@ -198,9 +197,9 @@ fn read_to_node_value(
         }
     }
     let mec: f64 = new_error_vec.iter().map(|x| x.1).sum();
-    return (
-        -1.0 * mec,
+    (
+        -mec,
         //            local_clustering::get_mec_score(&new_error_vec, &vec![0; 1], epsilon, div_factor),
         new_error_vec,
-    );
+    )
 }

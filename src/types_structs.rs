@@ -84,11 +84,11 @@ pub struct Frag {
 
 impl Ord for Frag {
     fn cmp(&self, other: &Frag) -> Ordering {
-        return (self.first_position, other.last_position, self.counter_id).cmp(&(
+        (self.first_position, other.last_position, self.counter_id).cmp(&(
             other.first_position,
             self.last_position,
             other.counter_id,
-        ));
+        ))
         //I tried the below ordering. Gives similar results.
         //return (self.first_position,other.seq_dict.len(),self.counter_id).cmp(&(other.first_position,self.seq_dict.len(),other.counter_id));
     }
@@ -198,23 +198,23 @@ impl<'a> HapNode<'a> {
             cov = *allele_cov_list[allele_cov_list.len() * 2 / 3];
         }
         //        let cov = allele_cov_list.last().unwrap_or(&0.);
-        let toret = HapNode {
-            frag_set: frag_set,
+        
+        HapNode {
+            frag_set,
             out_edges: vec![],
             in_edges: vec![],
             column: usize::MAX,
             row: usize::MAX,
             id: usize::MAX,
-            cov: cov,
+            cov,
             out_flows: vec![],
-            hap_map: hap_map,
-            snp_endpoints: snp_endpoints,
-        };
-        return toret;
+            hap_map,
+            snp_endpoints,
+        }
     }
 
     pub fn cov(&self) -> f64 {
-        return self.cov;
+        self.cov
     }
 }
 
@@ -240,19 +240,19 @@ pub fn build_child_node<'a>(
     }
     let updated_freqs = new_freqs;
 
-    let toret = SearchNode {
-        read: read,
-        part: part,
-        score: score,
-        freqs: updated_freqs,
-        error_vec: error_vec,
-        block_id: block_id,
-        parent_node: new_parent_node_option,
-        current_pos: current_pos,
-        broken_blocks: FxHashSet::default(),
-    };
+    
 
-    toret
+    SearchNode {
+        read,
+        part,
+        score,
+        freqs: updated_freqs,
+        error_vec,
+        block_id,
+        parent_node: new_parent_node_option,
+        current_pos,
+        broken_blocks: FxHashSet::default(),
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -273,9 +273,11 @@ impl PartialOrd for HapBlock {
 }
 
 pub fn build_frag(id: String, counter_id: usize, is_paired: bool) -> Frag {
-    let toret = Frag {
-        id: id,
-        counter_id: counter_id,
+    
+
+    Frag {
+        id,
+        counter_id,
         seq_dict: FxHashMap::default(),
         qual_dict: FxHashMap::default(),
         first_position: SnpPosition::MAX,
@@ -283,13 +285,11 @@ pub fn build_frag(id: String, counter_id: usize, is_paired: bool) -> Frag {
         positions: FxHashSet::default(),
         seq_string: vec![DnaString::new(); 2],
         qual_string: vec![vec![]; 2],
-        is_paired: is_paired,
+        is_paired,
         snp_pos_to_seq_pos: FxHashMap::default(),
         first_pos_base: GnPosition::MAX,
         last_pos_base: GnPosition::MAX,
-    };
-
-    toret
+    }
 }
 #[inline]
 pub fn update_frag(
@@ -310,8 +310,8 @@ pub fn update_frag(
         seq_pos = qpos + clipping_offset as usize;
     }
     frag.snp_pos_to_seq_pos
-        .insert(snp_pos, (pair_number, seq_pos as usize));
-    if !is_supp && frag.seq_string[pair_number as usize].len() == 0 {
+        .insert(snp_pos, (pair_number, seq_pos));
+    if !is_supp && frag.seq_string[pair_number as usize].is_empty() {
         frag.seq_string[pair_number as usize] =
             DnaString::from_acgt_bytes(&record.seq().as_bytes());
         if qual <= 255 - 33 {
@@ -372,10 +372,10 @@ pub fn build_truncated_hap_block(
 
     for pos in frag.seq_dict.keys() {
         let var_at_pos = frag.seq_dict.get(pos).unwrap();
-        let sites = block_vec[part].entry(*pos).or_insert(FxHashMap::default());
+        let sites = block_vec[part].entry(*pos).or_default();
         let site_counter = sites.entry(*var_at_pos).or_insert(OrderedFloat(0.));
         *site_counter += utils_frags::phred_scale(frag, pos);
     }
 
-    return (blocks_broken, HapBlock { blocks: block_vec });
+    (blocks_broken, HapBlock { blocks: block_vec })
 }

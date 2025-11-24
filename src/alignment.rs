@@ -18,8 +18,8 @@ pub fn realign(
     };
     let mut a = Block::<false, false>::new(2 * flank, 2 * flank, 2 * flank);
     for (snp_pos, orig_geno) in frag.seq_dict.iter_mut() {
-        let snp_gn_pos = var_to_gn_pos[snp_pos] as usize;
-        let snp_q_pos = frag.snp_pos_to_seq_pos[&(snp_pos)].1 as usize;
+        let snp_gn_pos = var_to_gn_pos[snp_pos];
+        let snp_q_pos = frag.snp_pos_to_seq_pos[snp_pos].1;
         if !(flank > snp_gn_pos
             || flank + snp_gn_pos >= ref_gn.len()
             || flank > snp_q_pos
@@ -36,7 +36,7 @@ pub fn realign(
                 block_size,
             );
             for i in 0..alleles.len() {
-                ref_str[flank] = alleles[i] as u8;
+                ref_str[flank] = alleles[i];
                 if ref_str
                     .iter()
                     .any(|x| x.to_ascii_uppercase() < b'A' || x.to_ascii_uppercase() > b'Z')

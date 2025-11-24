@@ -33,12 +33,12 @@ fn main() {
     let bam_file = matches.value_of("bam").unwrap();
     options.bam_file = bam_file.to_string();
     options.mapq_cutoff = 30;
-    let contigs_to_phase = file_reader::get_contigs_to_phase(&bam_file);
+    let contigs_to_phase = file_reader::get_contigs_to_phase(bam_file);
 
     let vcf_file = matches.value_of("vcf").unwrap();
-    let snp_to_genome_pos_t = file_reader::get_genotypes_from_vcf_hts(vcf_file.clone());
+    let snp_to_genome_pos_t = file_reader::get_genotypes_from_vcf_hts(vcf_file);
     let snp_to_genome_pos_map = snp_to_genome_pos_t;
-    let vcf_profile = file_reader::get_vcf_profile(&vcf_file, &contigs_to_phase);
+    let vcf_profile = file_reader::get_vcf_profile(vcf_file, &contigs_to_phase);
 
     let vtig_string = format!("{}_vartigs.txt", bam_file);
     let output_frag_str = matches.value_of("output").unwrap_or(&vtig_string);
@@ -54,7 +54,7 @@ fn main() {
             &vcf_profile,
             &options,
             &mut chrom_seqs,
-            &contig,
+            contig,
         );
         all_frags.sort_by(|a, b| a.first_position.cmp(&b.first_position));
         file_writer::write_alignment_as_vartig(

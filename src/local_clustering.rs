@@ -8,13 +8,13 @@ use fxhash::FxHashSet;
 
 //Return the set of reads for which every read covers at least one position in the interval
 //(inclusive)
-pub fn find_reads_in_interval<'a>(
+pub fn find_reads_in_interval(
     start: SnpPosition,
     end: SnpPosition,
     //position_to_reads : &FxHashMap<usize,FxHashSet<&Frag>>,
-    all_frags: &'a Vec<Frag>,
+    all_frags: &Vec<Frag>,
     max_num_reads: usize,
-) -> FxHashSet<&'a Frag> {
+) -> FxHashSet<&Frag> {
     let mut final_set = FxHashSet::default();
     //Original method of doing this : This is slower than just iterating thorugh the entire fragment list. We can speed this up by
     //indexing the fragments as well.
@@ -67,19 +67,19 @@ pub fn find_reads_in_interval<'a>(
 //max_iters : the maximum number of iterations we do.
 //div_factor : a normalizing factor for the binomial test to make the sample size smaller.
 //use_mec : we can also use MEC score instead of UPEM is desired
-pub fn optimize_clustering<'a>(
-    partition: Vec<FxHashSet<&'a Frag>>,
+pub fn optimize_clustering(
+    partition: Vec<FxHashSet<&Frag>>,
     epsilon: f64,
     max_iters: usize,
-) -> (f64, Vec<FxHashSet<&'a Frag>>, HapBlock) {
+) -> (f64, Vec<FxHashSet<&Frag>>, HapBlock) {
     let mut not_empty = false;
     for part in partition.iter() {
-        if part.len() > 0 {
+        if !part.is_empty() {
             not_empty = true;
         }
     }
 
-    if not_empty == false {
+    if !not_empty {
         let prev_hap_block = utils_frags::hap_block_from_partition(&partition, true);
         return (0.0, partition, prev_hap_block);
     }
@@ -105,7 +105,7 @@ pub fn optimize_clustering<'a>(
         let new_part = opt_iterate(&best_part, &prev_hap_block, epsilon);
         let new_block = utils_frags::hap_block_from_partition(&new_part, true);
         let new_binom_vec = get_mec_stats_epsilon(&new_part, &new_block, epsilon, true);
-        let new_score = new_binom_vec.iter().map(|x| x.1).sum::<f64>() * -1.;
+        let new_score = -new_binom_vec.iter().map(|x| x.1).sum::<f64>();
         if new_score > prev_score {
             //            log::trace!("Iter {} successful, new {} prev {}", i, new_score, prev_score);
         }
@@ -125,7 +125,7 @@ pub fn optimize_clustering<'a>(
         }
     }
 
-    return (prev_score, best_part, prev_hap_block);
+    (prev_score, best_part, prev_hap_block)
 }
 
 //Get a vector of read frequencies and error rates from a partition and its corresponding
@@ -167,7 +167,7 @@ pub fn get_mec_stats_epsilon_yes_phred(
             if allele_counts.is_empty() {
                 continue;
             }
-            allele_counts.sort_by(|x, y| x.1.cmp(&y.1));
+            allele_counts.sort_by(|x, y| x.1.cmp(y.1));
             let allele_counts: Vec<&GenotypeCount> = allele_counts.iter().map(|x| x.1).collect();
             let cons_bases = **allele_counts.last().unwrap();
             bases += *cons_bases;
@@ -180,7 +180,7 @@ pub fn get_mec_stats_epsilon_yes_phred(
         }
         binom_vec.push((bases, errors));
     }
-    return binom_vec;
+    binom_vec
 }
 
 pub fn get_mec_stats_epsilon_no_phred(
@@ -197,7 +197,7 @@ pub fn get_mec_stats_epsilon_no_phred(
             if allele_counts.is_empty() {
                 continue;
             }
-            allele_counts.sort_by(|x, y| x.1.cmp(&y.1));
+            allele_counts.sort_by(|x, y| x.1.cmp(y.1));
             let allele_counts: Vec<&GenotypeCount> = allele_counts.iter().map(|x| x.1).collect();
             let cons_bases = **allele_counts.last().unwrap();
             bases += *cons_bases;
@@ -210,7 +210,7 @@ pub fn get_mec_stats_epsilon_no_phred(
         }
         binom_vec.push((bases, errors));
     }
-    return binom_vec;
+    binom_vec
 }
 
 //Include a pental for single coverage alleles.
@@ -234,7 +234,7 @@ pub fn get_mec_stats_epsilon(
                     }
                 }
 
-                if !index_to_remove.is_none() {
+                if index_to_remove.is_some() {
                     allele_counts.remove(index_to_remove.unwrap());
                 }
             }
@@ -242,7 +242,7 @@ pub fn get_mec_stats_epsilon(
                 continue;
             }
 
-            allele_counts.sort_by(|x, y| x.1.cmp(&y.1));
+            allele_counts.sort_by(|x, y| x.1.cmp(y.1));
             let allele_counts: Vec<&GenotypeCount> = allele_counts.iter().map(|x| x.1).collect();
             let cons_bases = **allele_counts.last().unwrap();
             bases += *cons_bases;
@@ -285,7 +285,7 @@ pub fn get_mec_score(
         score += stat.1;
     }
     let score_f64 = score as f64;
-    score_f64 * -1.0
+    -score_f64
 }
 
 fn opt_iterate<'a>(
@@ -332,7 +332,7 @@ fn opt_iterate<'a>(
     //        number_of_moves = best_moves.len() / 5;
     //    }
     let mut number_of_moves = best_moves.len() / 10;
-    if number_of_moves == 0 && best_moves.len() > 0 {
+    if number_of_moves == 0 && !best_moves.is_empty() {
         number_of_moves = best_moves.len() / 3 + 1;
     }
     //    log::trace!("Number of moves {}", number_of_moves);

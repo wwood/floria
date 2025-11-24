@@ -50,10 +50,8 @@ fn update_hap_graph(hap_graph: &mut Vec<Vec<HapNode>>) {
                     } else {
                         //                        dbg!(i,&read.id, &read.first_position, &read.last_position);
                     }
-                } else {
-                    if hap_id_in != usize::MAX {
-                        out_weights[hap_id_in] += 1.;
-                    }
+                } else if hap_id_in != usize::MAX {
+                    out_weights[hap_id_in] += 1.;
                 }
             }
             //            let sum: f64 = out_weights.iter().sum();
@@ -165,7 +163,7 @@ fn get_local_hap_blocks<'a>(
         let split_part_endpoints;
         if constants::WEIRD_SPLIT {
             let split_part =
-                utils_frags::split_part_using_breaks(&break_pos, &optimized_part, &all_frags);
+                utils_frags::split_part_using_breaks(&break_pos, &optimized_part, all_frags);
             let endpoints;
             if j != 0 {
                 endpoints = (snp_range_vec[j].0, snp_range_vec[j].1);
@@ -192,7 +190,7 @@ fn get_local_hap_blocks<'a>(
         parts_vector.push(ind_parts);
         endpoints_vector.push(split_part_endpoints);
 
-        expected_errors_ref.push(num_alleles as f64 * epsilon);
+        expected_errors_ref.push(num_alleles * epsilon);
 
         if ploidy > ploidy_start {
             //            let mec_threshold = 1.0 / (1.0 - error_rate) / (1.0 + 1.0 / (ploidy + 1) as f64);
@@ -205,17 +203,17 @@ fn get_local_hap_blocks<'a>(
             if options.ploidy_sensitivity == 1 {
                 mec_threshold = 1.0
                     / (1.0 - epsilon)
-                    / (1.0 + 1.0 / ((ploidy as f64).powf(0.50) + 1.00) as f64);
+                    / (1.0 + 1.0 / (((ploidy as f64).powf(0.50) + 1.00)));
             } else if options.ploidy_sensitivity == 2 {
                 //                mec_threshold =
                 //                1.0 / (1.0 - epsilon) / (1.0 + 1.0 / ((ploidy as f64).powf(0.75) + 1.32) as f64);
                 mec_threshold = 1.0
                     / (1.0 - epsilon)
-                    / (1.0 + 1.0 / ((ploidy as f64).powf(1.00) + 1. / 3.) as f64);
+                    / (1.0 + 1.0 / (((ploidy as f64).powf(1.00) + 1. / 3.)));
             } else {
                 mec_threshold = 1.0
                     / (1.0 - epsilon)
-                    / (1.0 + 1.0 / ((ploidy as f64).powf(1.00) + 1.00) as f64);
+                    / (1.0 + 1.0 / (((ploidy as f64).powf(1.00) + 1.00)));
             }
             log::trace!(
                 "Expected MEC ratio {}, observed MEC ratio {}",
@@ -228,22 +226,18 @@ fn get_local_hap_blocks<'a>(
                 < mec_threshold
             {
                 //do nothing
-            } else {
-                if options.stopping_heuristic {
-                    log::trace!("MEC decrease thereshold, returning ploidy {}.", ploidy - 1);
-                    best_ploidy -= 1;
-                    break;
-                }
+            } else if options.stopping_heuristic {
+                log::trace!("MEC decrease thereshold, returning ploidy {}.", ploidy - 1);
+                best_ploidy -= 1;
+                break;
             }
             if mec_vector[ploidy - ploidy_start] < expected_errors_ref[ploidy - ploidy_start] {
                 log::trace!("MEC error threshold, returning ploidy {}.", ploidy);
                 break;
             }
-        } else {
-            if mec_vector[ploidy - ploidy_start] < expected_errors_ref[ploidy - ploidy_start] {
-                log::trace!("MEC error threshold, returning ploidy {}.", ploidy);
-                break;
-            }
+        } else if mec_vector[ploidy - ploidy_start] < expected_errors_ref[ploidy - ploidy_start] {
+            log::trace!("MEC error threshold, returning ploidy {}.", ploidy);
+            break;
         }
     }
 
@@ -289,14 +283,14 @@ fn get_local_hap_blocks<'a>(
                 &vec![],
                 &local_part_dir,
                 &format!("{}-{}-{}-{}", j, l, snp_range_vec[j].0, best_ploidy),
-                &snp_to_genome_pos,
+                snp_to_genome_pos,
                 &vec![],
                 &vec![],
             );
         }
     }
 
-    return Some(hap_node_blocks);
+    Some(hap_node_blocks)
 }
 
 fn process_chunks(mut chunks: Vec<(usize, Vec<Vec<HapNode>>)>) -> Vec<Vec<HapNode>> {
@@ -315,7 +309,7 @@ fn process_chunks(mut chunks: Vec<(usize, Vec<Vec<HapNode>>)>) -> Vec<Vec<HapNod
             id_counter += 1;
         }
     }
-    return return_blocks;
+    return_blocks
 }
 
 pub fn generate_hap_graph<'a>(
@@ -351,7 +345,7 @@ pub fn generate_hap_graph<'a>(
                 options,
             );
             //If the ploidy is 1, we return nothing.
-            if !block_chunk.is_none() {
+            if block_chunk.is_some() {
                 let mut locked = block_chunks.lock().unwrap();
                 locked.push((j, block_chunk.unwrap()));
             }
@@ -396,7 +390,7 @@ fn merge_split_parts(
             //            left_endpoint_merged = *breaks_with_min_sorted[k];
             continue;
         }
-        if cov_rat > 0.95 || cov_rat < 0.05 {
+        if !(0.05..=0.95).contains(&cov_rat) {
             tomerge.push(k);
         } else {
             snp_breakpoints.push((left_endpoint_merged, *breaks_with_min_sorted[k]));
@@ -420,14 +414,12 @@ fn merge_split_parts(
                 }
             }
             new_part_empty = false;
+        } else if !new_part_empty {
+            split_part_merge.push(new_part);
+            new_part = vec![FxHashSet::default(); split_part[0].len()];
+            new_part_empty = true;
         } else {
-            if !new_part_empty {
-                split_part_merge.push(new_part);
-                new_part = vec![FxHashSet::default(); split_part[0].len()];
-                new_part_empty = true;
-            } else {
-                split_part_merge.push(mem::take(&mut split_part[k]));
-            }
+            split_part_merge.push(mem::take(&mut split_part[k]));
         }
     }
     if split_part_merge.len() > 1 {
@@ -452,7 +444,7 @@ fn merge_split_parts(
     //TODO
     //    let snp_breakpoints =
     //        vec![(original_snp_endpoints.0, original_snp_endpoints.1); snp_breakpoints.len()];
-    return (split_part_merge, snp_breakpoints);
+    (split_part_merge, snp_breakpoints)
 }
 
 pub fn get_disjoint_paths_rewrite<'a>(
@@ -510,11 +502,9 @@ pub fn get_disjoint_paths_rewrite<'a>(
     for node_index in hap_petgraph.node_indices() {
         let in_neigh: Vec<_> = hap_petgraph
             .neighbors_directed(node_index, Direction::Incoming)
-            .into_iter()
             .collect();
         let out_neigh: Vec<_> = hap_petgraph
             .neighbors_directed(node_index, Direction::Outgoing)
-            .into_iter()
             .collect();
         let is_source = in_neigh.is_empty();
         let is_sink = out_neigh.is_empty();
@@ -525,10 +515,10 @@ pub fn get_disjoint_paths_rewrite<'a>(
             score = 0.;
         }
         trace_back_vec[node_index.index()] = TraceBackNode {
-            score: score,
+            score,
             prev_ind: None,
-            is_sink: is_sink,
-            is_source: is_source,
+            is_sink,
+            is_source,
         };
     }
 
@@ -558,11 +548,9 @@ pub fn get_disjoint_paths_rewrite<'a>(
             for node_index in hap_petgraph.node_indices() {
                 let in_neigh: Vec<_> = hap_petgraph
                     .neighbors_directed(node_index, Direction::Incoming)
-                    .into_iter()
                     .collect();
                 let out_neigh: Vec<_> = hap_petgraph
                     .neighbors_directed(node_index, Direction::Outgoing)
-                    .into_iter()
                     .collect();
                 let is_source = in_neigh.is_empty();
                 let is_sink = out_neigh.is_empty();
@@ -573,10 +561,10 @@ pub fn get_disjoint_paths_rewrite<'a>(
                     score = 0.;
                 }
                 trace_back_vec[node_index.index()] = TraceBackNode {
-                    score: score,
+                    score,
                     prev_ind: None,
-                    is_sink: is_sink,
-                    is_source: is_source,
+                    is_sink,
+                    is_source,
                 };
             }
         }
@@ -610,11 +598,9 @@ pub fn get_disjoint_paths_rewrite<'a>(
                         //            Cut off 10-edge
                         let in_neigh_source: Vec<_> = hap_petgraph
                             .neighbors_directed(source, Direction::Incoming)
-                            .into_iter()
                             .collect();
                         let in_neigh_target: Vec<_> = hap_petgraph
                             .neighbors_directed(target, Direction::Incoming)
-                            .into_iter()
                             .collect();
 
                         if in_neigh_source.len() == 1 {
@@ -649,7 +635,7 @@ pub fn get_disjoint_paths_rewrite<'a>(
                 best_score = trace_back_node.score;
             }
         }
-        if let None = index_of_best_end_node {
+        if index_of_best_end_node.is_none() {
             dbg!(&hap_petgraph);
             dbg!(&trace_back_vec.iter().enumerate());
             panic!("Shouldn't get here");
@@ -662,14 +648,14 @@ pub fn get_disjoint_paths_rewrite<'a>(
         let mut joined_path_part = FxHashSet::default();
         let mut snp_endpoints = (SnpPosition::MAX, SnpPosition::MIN);
         let mut haplogroup_flows = vec![];
-        while !index_of_best_end_node.is_none() {
+        while index_of_best_end_node.is_some() {
             let node_index = NodeIndex::new(index_of_best_end_node.unwrap());
             let out_edges = hap_petgraph.edges(node_index);
             for edge in out_edges {
                 let flow = edge.weight();
                 haplogroup_flows.push(*flow);
             }
-            if let None = hap_petgraph.node_weight(node_index) {
+            if hap_petgraph.node_weight(node_index).is_none() {
                 dbg!(&hap_petgraph, node_index, &trace_back_vec.len());
                 panic!();
             }
@@ -689,7 +675,7 @@ pub fn get_disjoint_paths_rewrite<'a>(
 
             //            dbg!(index_of_best_end_node,trace_back_vec[index_of_best_end_node.0][index_of_best_end_node.1]);
             best_path.push(index_of_best_end_node);
-            best_path_colrow.push((col.clone(), row.clone()));
+            best_path_colrow.push((*col, *row));
             log::trace!("{:?}, {:?}", &index_of_best_end_node, snp_endpoints);
             index_of_best_end_node = trace_back_vec[index_of_best_end_node.unwrap()].prev_ind;
         }
@@ -734,7 +720,7 @@ pub fn get_disjoint_paths_rewrite<'a>(
                 &all_joined_path_parts,
                 &path_parts_snp_endspoints,
                 &cov_of_haplogroups,
-                &vcf_profile,
+                vcf_profile,
                 contig,
                 block_len,
             );
@@ -742,5 +728,5 @@ pub fn get_disjoint_paths_rewrite<'a>(
         path_parts_snp_endspoints = binned_path_parts_snp_endspoints;
     }
 
-    return (all_joined_path_parts, path_parts_snp_endspoints);
+    (all_joined_path_parts, path_parts_snp_endspoints)
 }

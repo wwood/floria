@@ -15,34 +15,33 @@ fn overlap_percent(x1: SnpPosition, x2: SnpPosition, y1: SnpPosition, y2: SnpPos
     let min_length = x2 - x1 + 1;
     let p = intersect as f64 / min_length as f64;
     if p > 1. {
-        return 1.;
+        1.
     //        println!("{},{},{},{}",x1,x2,y1,y2);
     //        panic!();
     } else {
-        return p;
+        p
     }
 }
 
 //TODO not sure if this is needed. Will implement if needed.
-fn separate_broken_haplogroups<'a>(
-    all_joined_path_parts: &mut Vec<FxHashSet<&'a Frag>>,
+fn separate_broken_haplogroups(
+    all_joined_path_parts: &mut Vec<FxHashSet<&Frag>>,
     snp_range_parts_vec: &mut Vec<(SnpPosition, SnpPosition)>,
 ) {
     let mut all_breaks = vec![];
     for i in 0..snp_range_parts_vec.len() {
         let part = &all_joined_path_parts[i];
-        let mut vec_of_frags: Vec<&&Frag> = part.into_iter().collect();
+        let mut vec_of_frags: Vec<&&Frag> = part.iter().collect();
         vec_of_frags.sort_by(|x, y| x.first_position.cmp(&y.first_position));
         let mut current_lastest_pos = 0;
         let mut breaks = vec![];
         for frag in vec_of_frags {
-            if current_lastest_pos != 0 && frag.first_position > current_lastest_pos {
-                if current_lastest_pos >= snp_range_parts_vec[i].0
+            if current_lastest_pos != 0 && frag.first_position > current_lastest_pos
+                && current_lastest_pos >= snp_range_parts_vec[i].0
                     && current_lastest_pos < snp_range_parts_vec[i].1
                 {
                     breaks.push(current_lastest_pos);
                 }
-            }
             if frag.last_position > current_lastest_pos {
                 current_lastest_pos = frag.last_position;
             }
@@ -96,12 +95,12 @@ fn separate_broken_haplogroups<'a>(
         snp_range_parts_vec.push(new_ranges[i]);
     }
 }
-fn merge_overlapping_haplogroups<'a>(
-    all_joined_path_parts: &mut Vec<FxHashSet<&'a Frag>>,
+fn merge_overlapping_haplogroups(
+    all_joined_path_parts: &mut Vec<FxHashSet<&Frag>>,
     snp_range_parts_vec: &mut Vec<(SnpPosition, SnpPosition)>,
     epsilon: f64,
 ) {
-    let all_parts_block = utils_frags::hap_block_from_partition(&all_joined_path_parts, true);
+    let all_parts_block = utils_frags::hap_block_from_partition(all_joined_path_parts, true);
     let (all_overlaps, _) = find_overlapping_blocks(
         all_joined_path_parts,
         constants::MERGE_CUTOFF,
@@ -213,7 +212,7 @@ pub fn process_reads_for_final_parts<'a>(
         }
         let best_part = diff_part_vec
             .iter()
-            .min_by(|x, y| x.partial_cmp(&y).unwrap())
+            .min_by(|x, y| x.partial_cmp(y).unwrap())
             .unwrap()
             .1;
         //        log::trace!("Frag {}, best partitions {:?}", &frag.id, &diff_part_vec);
@@ -259,8 +258,8 @@ pub fn process_reads_for_final_parts<'a>(
                     .unwrap()
             });
             //        dbg!(best_candidate_block_map.keys(), best_key);
-            if !best_key.is_none() {
-                for i in best_candidate_block_map[&best_key.unwrap()].iter() {
+            if best_key.is_some() {
+                for i in best_candidate_block_map[best_key.unwrap()].iter() {
                     all_joined_path_parts[*i].insert(frag);
                 }
             }
@@ -270,7 +269,7 @@ pub fn process_reads_for_final_parts<'a>(
     }
 
     let (sorted_parts, sorted_ranges) = sort_parts(all_joined_path_parts, snp_range_parts_vec);
-    return (sorted_parts, sorted_ranges);
+    (sorted_parts, sorted_ranges)
 }
 
 fn sort_parts<'a>(
@@ -279,12 +278,12 @@ fn sort_parts<'a>(
 ) -> (Vec<FxHashSet<&'a Frag>>, Vec<(SnpPosition, SnpPosition)>) {
     let mut zipped: Vec<(FxHashSet<&'a Frag>, (SnpPosition, SnpPosition))> = all_joined_path_parts
         .into_iter()
-        .zip(snp_range_parts_vec.into_iter())
+        .zip(snp_range_parts_vec)
         .collect();
     zipped.sort_by(|x, y| x.1.cmp(&y.1));
     let new_range = zipped.iter().map(|x| x.1).collect();
     let new_parts = zipped.into_iter().map(|x| x.0).collect();
-    return (new_parts, new_range);
+    (new_parts, new_range)
 }
 
 pub fn bin_haplogroups<'a>(
@@ -299,26 +298,16 @@ pub fn bin_haplogroups<'a>(
 
     fn overlap(x1: usize, x2: usize, y1: usize, y2: usize) -> bool {
         if x2 > y1 && x2 < y2 {
-            return true;
+            true
         } else if y2 > x1 && y2 < x2 {
-            return true;
+            true
         } else if x1 >= y1 && x2 <= y2 {
-            return true;
-        } else if x1 <= y1 && x2 >= y2 {
-            return true;
-        } else {
-            return false;
-        }
+            true
+        } else { x1 <= y1 && x2 >= y2 }
     }
 
     fn close_enough(x1: usize, x2: usize, y1: usize, y2: usize, block_len: usize) -> bool {
-        if (x2 as i64 - y1 as i64).abs() < 2 * block_len as i64
-            || (y2 as i64 - x1 as i64).abs() < 2 * block_len as i64
-        {
-            return true;
-        } else {
-            return false;
-        }
+        (x2 as i64 - y1 as i64).abs() < 2 * block_len as i64 || (y2 as i64 - x1 as i64).abs() < 2 * block_len as i64
     }
 
     fn dist(
@@ -343,7 +332,7 @@ pub fn bin_haplogroups<'a>(
         }
 
         if !compat_ol || !compat_ce {
-            return f64::MAX;
+            f64::MAX
         } else {
             let cov_x = x.iter().map(|x| x.2).sum::<f64>() / x.len() as f64;
             let cov_y = y.iter().map(|x| x.2).sum::<f64>() / y.len() as f64;
@@ -351,7 +340,7 @@ pub fn bin_haplogroups<'a>(
             let poiy = Poisson::new(cov_y).unwrap();
             let dist = poix.pmf(cov_y as u64) + poiy.pmf(cov_x as u64);
             //            dbg!(x,y,cov_x,cov_y,dist);
-            return -1. * (dist / 2.).ln();
+            -(dist / 2.).ln()
         }
     }
 
@@ -362,10 +351,10 @@ pub fn bin_haplogroups<'a>(
     let mut clusters = vec![];
     let mut none_clusters = vec![];
     for i in 0..snp_endpoints.len() {
-        let left_gn = snp_to_gn_pos[&(snp_endpoints[i].0 - 1)] as usize;
-        let right_gn = snp_to_gn_pos[&(snp_endpoints[i].1 - 1)] as usize;
+        let left_gn = snp_to_gn_pos[&(snp_endpoints[i].0 - 1)];
+        let right_gn = snp_to_gn_pos[&(snp_endpoints[i].1 - 1)];
         let cov = cov_of_haplogroups[i];
-        if !cov.is_none() {
+        if cov.is_some() {
             clusters.push(vec![(left_gn, right_gn, cov.unwrap(), i)]);
         } else {
             none_clusters.push(i);
@@ -445,14 +434,14 @@ pub fn bin_haplogroups<'a>(
 
     for index in none_clusters {
         new_parts.push(parts[index].clone());
-        new_snp_ranges.push(snp_endpoints[index].clone());
+        new_snp_ranges.push(snp_endpoints[index]);
     }
 
-    return (new_snp_ranges, new_parts);
+    (new_snp_ranges, new_parts)
 }
 
-fn find_overlapping_blocks<'a>(
-    parts: &Vec<FxHashSet<&'a Frag>>,
+fn find_overlapping_blocks(
+    parts: &Vec<FxHashSet<&Frag>>,
     ol_cutoff: f64,
     snp_range_parts_vec: &Vec<(SnpPosition, SnpPosition)>,
 ) -> (
@@ -511,7 +500,7 @@ fn find_overlapping_blocks<'a>(
         }
     }
 
-    return (all_overlaps, all_overlaps_percentage);
+    (all_overlaps, all_overlaps_percentage)
 }
 
 pub fn get_hapq<'a>(
@@ -538,7 +527,7 @@ pub fn get_hapq<'a>(
         errs.push(err);
     }
     let avg_err = error / weight;
-    let all_parts_block = utils_frags::hap_block_from_partition(&parts, true);
+    let all_parts_block = utils_frags::hap_block_from_partition(parts, true);
     let (all_ol, all_overlaps_p) = find_overlapping_blocks(parts, 0.05, snp_range_parts_vec);
     for i in 0..parts.len() {
         log::trace!(
@@ -563,7 +552,7 @@ pub fn get_hapq<'a>(
                 if (same + diff) == 0. {
                     dist = 1.;
                 } else {
-                    dist = diff as f64 / (same + diff) as f64;
+                    dist = diff / ((same + diff));
                 }
                 if *ol * (1. - dist) > max_penalty {
                     max_ol = *ol;
@@ -616,7 +605,7 @@ pub fn get_hapq<'a>(
         //        purities.push((-1. * purity_val) as u8);
         purities.push(errs[i] / avg_err)
     }
-    return (hapqs, purities, avg_err);
+    (hapqs, purities, avg_err)
 }
 
 pub fn get_frags_in_snpless_gaps<'a>(
@@ -646,7 +635,7 @@ pub fn get_frags_in_snpless_gaps<'a>(
     for (i, range) in path_parts.iter().enumerate() {
         let mut start = snp_to_gn_pos[(range.0 - 1) as usize];
         if start > block_len && paired {
-            start = start - block_len;
+            start -= block_len;
         }
         let end;
         if paired {
@@ -655,7 +644,7 @@ pub fn get_frags_in_snpless_gaps<'a>(
             end = snp_to_gn_pos[(range.1 - 1) as usize] + 1
         }
         interval_vec.push(Iv {
-            start: start,
+            start,
             stop: end,
             val: i,
         });

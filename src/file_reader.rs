@@ -200,11 +200,10 @@ fn alignment_passed_check(
             return (false, true);
         } else if !use_supplementary {
             return (false, true);
-        } else if filter_supplementary {
-            if mapq < mapq_supp_cutoff {
+        } else if filter_supplementary
+            && mapq < mapq_supp_cutoff {
                 return (false, true);
             }
-        }
     } else {
         is_supp = false;
     }
@@ -224,7 +223,7 @@ fn alignment_passed_check(
         return (false, is_supp);
     }
 
-    return (true, is_supp);
+    (true, is_supp)
 }
 
 pub fn get_vcf_profile<'a>(vcf_file: &str, ref_chroms: &'a Vec<String>) -> VcfProfile<'a> {
@@ -306,14 +305,14 @@ pub fn get_vcf_profile<'a>(vcf_file: &str, ref_chroms: &'a Vec<String>) -> VcfPr
     vcf_prof.vcf_pos_allele_map = vcf_pos_allele_map;
     vcf_prof.vcf_pos_to_snp_counter_map = vcf_pos_to_snp_counter_map;
     vcf_prof.vcf_snp_pos_to_gn_pos_map = vcf_snp_pos_to_gn_pos_map;
-    return vcf_prof;
+    vcf_prof
 }
 
 pub fn get_bam_readers(options: &Options) -> (bam::IndexedReader, Option<bam::IndexedReader>) {
     let long_bam_file = &options.bam_file;
     let short_bam_file = &options.short_bam_file;
     let short_bam_read;
-    if short_bam_file != "" {
+    if !short_bam_file.is_empty() {
         let short_bam = match bam::IndexedReader::from_path(short_bam_file) {
             Ok(short_bam) => short_bam,
             Err(_) => {
@@ -333,7 +332,7 @@ pub fn get_bam_readers(options: &Options) -> (bam::IndexedReader, Option<bam::In
         }
     };
 
-    return (long_bam, short_bam_read);
+    (long_bam, short_bam_read)
 }
 
 pub fn get_frags_from_bamvcf_rewrite(
@@ -413,7 +412,7 @@ pub fn get_frags_from_bamvcf_rewrite(
                     //                    );
 
                     if passed_check.0 {
-                        let rec_name: Vec<u8> = record.qname().iter().cloned().collect();
+                        let rec_name: Vec<u8> = record.qname().to_vec();
                         let snp_positions_contig = &vcf_pos_to_snp_counter_map[contig];
                         let pos_allele_map = &vcf_pos_allele_map[contig];
                         let snp_to_gn_map = &vcf_snp_pos_to_gn_pos_map[contig];
@@ -425,7 +424,7 @@ pub fn get_frags_from_bamvcf_rewrite(
 
                         //                        if frag.seq_dict.keys().len() > 0 {
                         if !chrom_seqs.is_none() {
-                            alignment::realign(&seq, &mut frag, &snp_to_gn_map, &pos_allele_map);
+                            alignment::realign(&seq, &mut frag, snp_to_gn_map, pos_allele_map);
                         }
                         let mut locked = ref_id_to_frag_map.lock().unwrap();
                         let bucket = locked.entry(rec_name).or_insert(vec![]);
@@ -438,7 +437,7 @@ pub fn get_frags_from_bamvcf_rewrite(
 
     let ref_vec_frags = combine_frags(
         ref_id_to_frag_map.into_inner().unwrap(),
-        &vcf_profile,
+        vcf_profile,
         contig,
         options,
     );
@@ -480,8 +479,8 @@ pub fn get_fasta_seqs(fasta_file: &str) -> FastaIndexedReader<std::fs::File> {
         }
     }
     let reader = FastaIndexedReader::from_file(&fasta_file.to_string());
-    if !reader.is_err() {
-        return reader.unwrap();
+    if reader.is_ok() {
+        reader.unwrap()
     } else {
         log::error!("Could not read fasta file. Exiting.");
         std::process::exit(1);
@@ -585,7 +584,7 @@ fn combine_frags(
             let mut supp_intervals = vec![];
 
             for frag in frags.iter() {
-                if frag.1.seq_dict.len() > 0 {
+                if !frag.1.seq_dict.is_empty() {
                     supp_intervals.push((frag.1.first_position, frag.1.last_position));
                 }
             }
@@ -594,7 +593,7 @@ fn combine_frags(
             let snp_to_gn = &vcf_profile.vcf_snp_pos_to_gn_pos_map[contig];
             let mut take_primary_only = false;
             //dbg!(&supp_intervals);
-            if supp_intervals.len() > 0 {
+            if !supp_intervals.is_empty() {
                 for i in 0..supp_intervals.len() - 1 {
                     if snp_to_gn[&supp_intervals[i + 1].0] as i64
                         - snp_to_gn[&supp_intervals[i].1] as i64
@@ -609,7 +608,7 @@ fn combine_frags(
             let mut primary_alignment_index = None;
             for (i, frag) in frags.iter().enumerate() {
                 if frag.0 & supplementary_mask != supplementary_mask {
-                    if !primary_alignment_index.is_none() {
+                    if primary_alignment_index.is_some() {
                         log::warn!("More than one primary alignment for read {}. Only one primary alignment allowed
                             per read unless paired. Using arbitrary primary alignment for read.", frag.1.id);
                     }
@@ -659,7 +658,7 @@ fn combine_frags(
             }
         }
     }
-    return ref_frags;
+    ref_frags
 }
 
 fn frag_from_record(
@@ -693,7 +692,7 @@ fn frag_from_record(
         }
         let genome_pos = pair[1].unwrap() as GnPosition;
         if !snp_positions.contains_key(&genome_pos) {
-            if !pair[0].is_none() {
+            if pair[0].is_some() {
                 _last_read_aligned_pos = pair[0].unwrap() as GnPosition;
             }
             continue;
@@ -732,25 +731,24 @@ fn frag_from_record(
     frag.seq_string[0] = DnaString::from_acgt_bytes(&record.seq().as_bytes());
     frag.positions = frag
         .seq_dict
-        .keys()
-        .map(|x| *x)
+        .keys().copied()
         .collect::<FxHashSet<SnpPosition>>();
     frag.qual_string[0] = record
         .qual()
         .iter()
         .map(|x| x.checked_add(33).unwrap_or(255))
         .collect();
-    return frag;
+    frag
 }
 
 pub fn get_contigs_to_phase(bam_file: &str) -> Vec<String> {
     let bam = IndexedReader::from_path(bam_file).unwrap();
-    return bam
+    bam
         .header()
         .target_names()
         .iter()
         .map(|x| String::from_utf8(x.to_vec()).unwrap())
-        .collect();
+        .collect()
 }
 
 pub fn l_epsilon_auto_detect(bam_file: &str) -> (usize, f64) {
@@ -779,7 +777,7 @@ pub fn l_epsilon_auto_detect(bam_file: &str) -> (usize, f64) {
                 let errors_mask = 1796;
                 let secondary_mask = 256;
                 //We can only get record for primary sequences
-                if flags & errors_mask > 0 || flags & secondary_mask > 0 || rec.seq().len() == 0 {
+                if flags & errors_mask > 0 || flags & secondary_mask > 0 || rec.seq().is_empty() {
                     continue;
                 }
                 read_lengths.push(rec.seq().len());
@@ -803,22 +801,22 @@ pub fn l_epsilon_auto_detect(bam_file: &str) -> (usize, f64) {
             continue;
         }
         let other_bases = total_c - most_base;
-        let err = other_bases as f64 / most_base as f64;
+        let err = other_bases / most_base;
         err_vec.push(err);
-        if err_vec.len() >= stop && read_lengths.len() > 0 {
+        if err_vec.len() >= stop && !read_lengths.is_empty() {
             break;
         }
         count += 1;
     }
     read_lengths.sort();
-    if read_lengths.len() == 0 {
+    if read_lengths.is_empty() {
         warn!("Parameter estimator for -l and -e failed. Assuming short-reads and returning -l 500 and -e 0.01. WARNING: If using long-reads, make sure to change this!");
         return (500, 0.01);
     }
     let q_33 = read_lengths[read_lengths.len() * 33 / 100];
     let q_50 = read_lengths[read_lengths.len() * 50 / 100];
     let q_66 = read_lengths[read_lengths.len() * 66 / 100];
-    err_vec.sort_by(|x, y| x.partial_cmp(&y).unwrap());
+    err_vec.sort_by(|x, y| x.partial_cmp(y).unwrap());
     //let med = err_vec[err_vec.len() * 50 /100];
     let med66 = err_vec[err_vec.len() * 66 / 100];
     //let eps_guess = err_vec.into_iter().sum::<f64>() as f64 / stop as f64;
@@ -827,6 +825,6 @@ pub fn l_epsilon_auto_detect(bam_file: &str) -> (usize, f64) {
     let final_l = usize::max(q_66, constants::MINIMUM_BLOCK_SIZE);
     info!("33,50,66 non-hard clipped read length percentiles: {}, {}, {}. If -l is not set, estimated -l is set to {}.", q_33, q_50, q_66, final_l);
     info!("If -e is not set, estimated -e is set to {}.", final_eps);
-    return (final_l, final_eps);
+    (final_l, final_eps)
     //panic!();
 }

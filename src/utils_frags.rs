@@ -35,7 +35,7 @@ pub fn distance_read_haplo_epsilon_empty(r: &Frag, hap: &Haplotype, epsilon: f64
     for pos in r.positions.iter() {
         let mut empty_pos = true;
         if hap.contains_key(pos) {
-            for (_key, val) in hap[&pos].iter() {
+            for (_key, val) in hap[pos].iter() {
                 if *val != 0. {
                     empty_pos = false;
                     break;
@@ -150,11 +150,7 @@ pub fn check_overlap(r1: &Frag, r2: &Frag) -> bool {
         return false;
     }
     let t: Vec<_> = r1.positions.intersection(&r2.positions).collect();
-    if t.len() == 0 {
-        return false;
-    } else {
-        return true;
-    }
+    !t.is_empty()
 }
 
 pub fn set_to_seq_dict(frag_set: &FxHashSet<&Frag>, use_phred: bool) -> Haplotype {
@@ -171,7 +167,7 @@ pub fn set_to_seq_dict(frag_set: &FxHashSet<&Frag>, use_phred: bool) -> Haplotyp
             }
         }
     }
-    return hap_map;
+    hap_map
 }
 
 pub fn hap_block_from_partition(part: &Vec<FxHashSet<&Frag>>, use_qual: bool) -> HapBlock {
@@ -189,7 +185,7 @@ pub fn get_avg_length(all_frags: &Vec<Frag>, quantile: f64) -> SnpPosition {
         length_vec.push(frag.last_position - frag.first_position);
     }
     length_vec.sort();
-    return length_vec[(length_vec.len() as f64 * quantile) as usize];
+    length_vec[(length_vec.len() as f64 * quantile) as usize]
 }
 
 pub fn get_length_gn(all_frags: &Vec<Frag>) -> SnpPosition {
@@ -238,10 +234,10 @@ pub fn stable_binom_cdf_p_rev(n: usize, k: usize, p: f64, div_factor: f64) -> f6
     if a < p {
         rel_ent = -rel_ent;
     }
-    let large_dev_val = -1.0 * n64 / div_factor * rel_ent;
+    
     //- 0.5 * (6.283*a*(1.0-a)*n64/div_factor).ln();
 
-    return large_dev_val;
+    -n64 / div_factor * rel_ent
 
     //    return -1.0 * n64 / div_factor * rel_ent;
 }
@@ -253,7 +249,7 @@ pub fn log_sum_exp(probs: &Vec<f64>) -> f64 {
         sum += (logpval - max).exp();
     }
 
-    return max + sum.ln();
+    max + sum.ln()
 }
 
 //Get a vector of read frequencies and error rates from a partition and its corresponding
@@ -292,7 +288,7 @@ pub fn get_seq_err_correlations(
             let mut total_alleles = 0.0;
 
             //            dbg!(&seq_err_corr_vec[j][i]);
-            for (key, value) in seq_err_corr_vec[j].get(&i).unwrap().iter() {
+            for (key, value) in seq_err_corr_vec[j].get(i).unwrap().iter() {
                 let e1 = errors_1.entry(key.0).or_insert(0.0);
                 *e1 += *value as f64;
                 total_alleles += *value as f64;
@@ -362,7 +358,7 @@ pub fn err_correlations(
             //last_pos-1 because positions are 1-indexed
             let index = seq_err_corr_map
                 .entry(*pos - 1)
-                .or_insert(FxHashMap::default());
+                .or_default();
             let count = index.entry((current_var, next_var)).or_insert(0);
             *count += 1;
         }
@@ -384,7 +380,7 @@ pub fn split_part_using_breaks<'a>(
     let mut split_parts = vec![vec![FxHashSet::default(); ploidy]; breaks_with_min.len() + 1];
     for (i, hap) in part_to_split.iter().enumerate() {
         for read in hap.iter() {
-            if breaks_with_min.len() == 0 {
+            if breaks_with_min.is_empty() {
                 split_parts[0][i].insert(&all_reads[read.counter_id]);
             } else {
                 for (j, break_pos) in breaks_with_min.keys().sorted().enumerate() {
@@ -398,7 +394,7 @@ pub fn split_part_using_breaks<'a>(
             }
         }
     }
-    return split_parts;
+    split_parts
 }
 
 pub fn get_range_with_lengths(
@@ -430,7 +426,7 @@ pub fn get_range_with_lengths(
         }
         cum_pos += *pos - last_pos;
         last_pos = *pos;
-        if cum_pos > block_length - overlap_len && hit_new_left == false {
+        if cum_pos > block_length - overlap_len && !hit_new_left {
             new_left_end = i;
             hit_new_left = true;
         }
@@ -462,7 +458,7 @@ pub fn get_range_with_lengths(
     }
 
     return_vec = return_vec.into_iter().map(|x| (x.0 + 1, x.1 + 1)).collect();
-    return return_vec;
+    return_vec
 }
 
 pub fn add_read_to_block(block: &mut HapBlock, frag: &Frag, part: usize) {
@@ -470,7 +466,7 @@ pub fn add_read_to_block(block: &mut HapBlock, frag: &Frag, part: usize) {
         let var_at_pos = frag.seq_dict.get(pos).unwrap();
         let sites = block.blocks[part]
             .entry(*pos)
-            .or_insert(FxHashMap::default());
+            .or_default();
         let site_counter = sites.entry(*var_at_pos).or_insert(OrderedFloat(0.));
         *site_counter += phred_scale(frag, pos);
     }
@@ -481,7 +477,7 @@ pub fn remove_read_from_block(block: &mut HapBlock, frag: &Frag, part: usize) {
         let var_at_pos = frag.seq_dict.get(pos).unwrap();
         let sites = block.blocks[part]
             .entry(*pos)
-            .or_insert(FxHashMap::default());
+            .or_default();
         let site_counter = sites.entry(*var_at_pos).or_insert(OrderedFloat(0.));
         if *site_counter != 0. {
             *site_counter -= phred_scale(frag, pos);
@@ -536,10 +532,10 @@ pub fn hybrid_correction(frags: Vec<Frag>) -> (Vec<Frag>, Vec<Frag>) {
                     break;
                 }
                 if j == i {
-                    covering_i_frags = covering_i_frags.union(&covering_i).copied().collect();
+                    covering_i_frags = covering_i_frags.union(covering_i).copied().collect();
                 } else {
                     covering_i_frags = covering_i_frags
-                        .intersection(&covering_i)
+                        .intersection(covering_i)
                         .copied()
                         .collect();
                 }
@@ -551,7 +547,7 @@ pub fn hybrid_correction(frags: Vec<Frag>) -> (Vec<Frag>, Vec<Frag>) {
             let best_frag = covering_i_frags
                 .into_iter()
                 .max_by_key(|x| {
-                    let d = distance(x, &long_frag);
+                    let d = distance(x, long_frag);
                     (d.0 * 10) / (d.1 + 1)
                 })
                 .unwrap();
@@ -562,7 +558,7 @@ pub fn hybrid_correction(frags: Vec<Frag>) -> (Vec<Frag>, Vec<Frag>) {
         }
         let cand_seq_dict = set_to_seq_dict(&covering_frags, true);
         let mut locked = final_frags.lock().unwrap();
-        locked.push(correct_long_read(&cand_seq_dict, &long_frag));
+        locked.push(correct_long_read(&cand_seq_dict, long_frag));
         //        dbg!(cand_seq_dict, &long_frag.seq_dict);
     });
 
@@ -573,7 +569,7 @@ pub fn hybrid_correction(frags: Vec<Frag>) -> (Vec<Frag>, Vec<Frag>) {
             short_frags.push(frag);
         }
     }
-    return (final_frags.into_inner().unwrap(), short_frags);
+    (final_frags.into_inner().unwrap(), short_frags)
 }
 
 fn correct_long_read(short_frags_dict: &Haplotype, long_frag: &Frag) -> Frag {
@@ -583,17 +579,17 @@ fn correct_long_read(short_frags_dict: &Haplotype, long_frag: &Frag) -> Frag {
             continue;
         }
         let val = new_frag.seq_dict.get_mut(pos).unwrap();
-        if short_frags_dict[&pos].len() > 1 {
+        if short_frags_dict[pos].len() > 1 {
             continue;
         } else {
-            *val = *short_frags_dict[&pos]
+            *val = *short_frags_dict[pos]
                 .iter()
                 .max_by_key(|entry| entry.1)
                 .unwrap()
                 .0;
         }
     }
-    return new_frag;
+    new_frag
 }
 
 pub fn get_errors_cov_from_frags(
@@ -642,7 +638,7 @@ pub fn get_errors_cov_from_frags(
         //Mean
         else {
             //cov = *snp_counter_list.iter().sum::<GenotypeCount>() / snp_counter_list.len() as f64;
-            if snp_nonzero.len() > 0 {
+            if !snp_nonzero.is_empty() {
                 cov = *snp_counter_list.iter().sum::<GenotypeCount>() / snp_nonzero.len() as f64;
             } else {
                 cov = 0.;
@@ -650,12 +646,12 @@ pub fn get_errors_cov_from_frags(
         }
     }
 
-    return (
+    (
         cov,
-        errors as f64 / total_support as f64,
-        errors as f64,
-        total_support as f64,
-    );
+        errors / total_support,
+        errors,
+        total_support,
+    )
 }
 
 pub fn distance_between_haplotypes(
@@ -698,17 +694,17 @@ pub fn distance_between_haplotypes(
         }
     }
 
-    return (same, diff);
+    (same, diff)
 }
 
 #[inline]
 pub fn phred_scale(frag: &Frag, pos: &SnpPosition) -> GenotypeCount {
     if constants::USE_QUAL_SCORES {
-        let qual_score = frag.qual_dict.get(&pos).unwrap();
+        let qual_score = frag.qual_dict.get(pos).unwrap();
         let prob = 1. - 10_f32.powf((*qual_score) as f32 / -10.);
-        return OrderedFloat(prob.into());
+        OrderedFloat(prob.into())
     } else {
-        return OrderedFloat(1.);
+        OrderedFloat(1.)
     }
 }
 
@@ -722,7 +718,7 @@ pub fn remove_monomorphic_allele(mut frags: Vec<Frag>, error: f64) -> Vec<Frag> 
         for (snp_pos, geno) in frag.seq_dict.iter() {
             let count_m = allele_count_map
                 .entry(*snp_pos)
-                .or_insert(FxHashMap::default());
+                .or_default();
             let count = count_m.entry(*geno).or_insert(OrderedFloat(0.));
             *count += phred_scale(frag, snp_pos);
         }
@@ -734,7 +730,7 @@ pub fn remove_monomorphic_allele(mut frags: Vec<Frag>, error: f64) -> Vec<Frag> 
             log::trace!("allele {} removed", allele);
         } else {
             let mut vals = map.values().collect::<Vec<&GenotypeCount>>();
-            vals.sort_by(|x, y| y.partial_cmp(&x).unwrap());
+            vals.sort_by(|x, y| y.partial_cmp(x).unwrap());
             if vals[0].into_inner() * error > vals[1].into_inner() {
                 mono_alleles.insert(*allele);
                 log::trace!("allele {} removed, {:?}", allele, map);
@@ -769,5 +765,5 @@ pub fn remove_monomorphic_allele(mut frags: Vec<Frag>, error: f64) -> Vec<Frag> 
         frag.counter_id = i;
     }
 
-    return new_frags;
+    new_frags
 }

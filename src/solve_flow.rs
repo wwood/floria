@@ -270,8 +270,8 @@ pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec {
     }
 
     for i in 0..t.len() {
-        problem.add_constraint(&[(t[i], 1.), (x[i], -1.)], ComparisonOp::Ge, -1.0 * ae[i]);
-        problem.add_constraint(&[(t[i], 1.), (x[i], 1.)], ComparisonOp::Ge, 1.0 * ae[i]);
+        problem.add_constraint([(t[i], 1.), (x[i], -1.)], ComparisonOp::Ge, -ae[i]);
+        problem.add_constraint([(t[i], 1.), (x[i], 1.)], ComparisonOp::Ge, 1.0 * ae[i]);
     }
     let solution = problem.solve().unwrap();
     let mut flow_update_vec = vec![];
@@ -283,5 +283,5 @@ pub fn solve_lp_graph(hap_graph: &Vec<Vec<HapNode>>) -> FlowUpVec {
         flow_update_vec.push(((node1.column, node1.row), (node2.column, node2.row), flow));
     }
 
-    return flow_update_vec;
+    flow_update_vec
 }

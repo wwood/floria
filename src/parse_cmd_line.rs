@@ -175,12 +175,13 @@ pub fn parse_cmd_line(matches: ArgMatches) -> Options {
         .unwrap_or("2")
         .parse::<u8>()
         .unwrap();
-    if !(ploidy_sensitivity >= 1 && ploidy_sensitivity <= 3) {
+    if !(1..=3).contains(&ploidy_sensitivity) {
         log::error!("Ploidy sensitivty option must be between 1 and 3");
         std::process::exit(1);
     }
 
-    let opt = Options {
+    
+    Options {
         bam_file,
         vcf_file,
         use_qual_scores,
@@ -208,6 +209,5 @@ pub fn parse_cmd_line(matches: ArgMatches) -> Options {
         overwrite,
         ploidy_sensitivity,
         supp_aln_dist_cutoff,
-    };
-    opt
+    }
 }

@@ -38,7 +38,7 @@ pub fn write_outputs(
     let contig_len = fasta_seq.len();
 
     let (hapqs, rel_err, avg_err) =
-        part_block_manip::get_hapq(&part, snp_pos_to_genome_pos, snp_range_parts_vec, options);
+        part_block_manip::get_hapq(part, snp_pos_to_genome_pos, snp_range_parts_vec, options);
     write_haplotypes(
         part,
         contig,
@@ -61,7 +61,7 @@ pub fn write_outputs(
         &hapqs,
         &rel_err,
     );
-    write_nosnp_reads_parts(&out_bam_part_dir, &snpless_frags);
+    write_nosnp_reads_parts(&out_bam_part_dir, snpless_frags);
     if options.output_reads {
         write_reads(
             part,
@@ -71,7 +71,7 @@ pub fn write_outputs(
             &hapqs,
             gzip,
         );
-        write_nosnp_reads(&out_bam_part_dir, &snpless_frags, gzip);
+        write_nosnp_reads(&out_bam_part_dir, snpless_frags, gzip);
     }
 }
 
@@ -119,17 +119,17 @@ fn write_nosnp_reads(out_bam_part_dir: &str, snpless_frags: &Vec<&Frag>, gzip: b
     for frag in snpless_frags {
         if frag.is_paired {
             paired_written = true;
-            write_paired_reads_no_trim(&mut fastq_writer_paired1, &mut fastq_writer_paired2, &frag);
+            write_paired_reads_no_trim(&mut fastq_writer_paired1, &mut fastq_writer_paired2, frag);
         } else {
             single_end_written = true;
-            if frag.seq_string[0].len() == 0 {
+            if frag.seq_string[0].is_empty() {
                 fastq_writer
-                    .write(&format!("{}", frag.id), None, &vec![78], &vec![33])
+                    .write(&frag.id.to_string(), None, &[78], &[33])
                     .unwrap();
             } else {
                 fastq_writer
                     .write(
-                        &format!("{}", frag.id),
+                        &frag.id.to_string(),
                         None,
                         &frag.seq_string[0].to_ascii_vec(),
                         &frag.qual_string[0],
@@ -153,13 +153,13 @@ fn write_nosnp_reads_parts(out_bam_part_dir: &str, snpless_frags: &Vec<&Frag>) {
 
     let mut file = LineWriter::new(file);
 
-    write!(file, "READ_NAME\tREAD_LENGTH_IN_BASES\n").unwrap();
+    writeln!(file, "READ_NAME\tREAD_LENGTH_IN_BASES").unwrap();
     for frag in snpless_frags {
         let mut len = 0;
         for dna_string in frag.seq_string.iter() {
             len += dna_string.len();
         }
-        write!(file, "{}\t{}\n", &frag.id, len).unwrap();
+        writeln!(file, "{}\t{}", &frag.id, len).unwrap();
     }
 }
 
@@ -168,14 +168,14 @@ fn write_paired_reads_no_trim<W: Write>(
     fastq_writer_paired2: &mut Writer<W>,
     frag: &Frag,
 ) {
-    if frag.seq_string[0].len() == 0 {
+    if frag.seq_string[0].is_empty() {
         fastq_writer_paired1
             .write(
                 &format!("{}/1", frag.id),
                 None,
                 //Write N instead
-                &vec![78],
-                &vec![33],
+                &[78],
+                &[33],
             )
             .unwrap();
     } else {
@@ -188,14 +188,14 @@ fn write_paired_reads_no_trim<W: Write>(
             )
             .unwrap();
     }
-    if frag.seq_string[1].len() == 0 {
+    if frag.seq_string[1].is_empty() {
         fastq_writer_paired2
             .write(
                 &format!("{}/2", frag.id),
                 None,
                 //Write N instead
-                &vec![78],
-                &vec![33],
+                &[78],
+                &[33],
             )
             .unwrap();
     } else {
@@ -249,19 +249,19 @@ fn _write_paired_reads<W: Write>(
                 &format!("{}/{}", frag.id, other_read_pair),
                 None,
                 //Write N instead
-                &vec![78],
-                &vec![33],
+                &[78],
+                &[33],
             )
             .unwrap();
     } else {
-        if frag.seq_string[left_read_pair as usize].len() == 0 {
+        if frag.seq_string[left_read_pair as usize].is_empty() {
             fastq_writer_paired1
                 .write(
                     &format!("{}/1", frag.id),
                     None,
                     //Write N instead
-                    &vec![78],
-                    &vec![33],
+                    &[78],
+                    &[33],
                 )
                 .unwrap();
         } else {
@@ -274,20 +274,20 @@ fn _write_paired_reads<W: Write>(
                 )
                 .unwrap();
         }
-        if frag.seq_string[right_read_pair as usize].len() == 0 {
+        if frag.seq_string[right_read_pair as usize].is_empty() {
             fastq_writer_paired2
                 .write(
                     &format!("{}/2", frag.id),
                     None,
                     //Write N instead
-                    &vec![78],
-                    &vec![33],
+                    &[78],
+                    &[33],
                 )
                 .unwrap();
         } else {
             let qual_cut_string =
                 &frag.qual_string[right_read_pair as usize].as_slice()[..right_seq_pos];
-            let rev_quals: Vec<u8> = qual_cut_string.into_iter().rev().map(|x| *x).collect();
+            let rev_quals: Vec<u8> = qual_cut_string.iter().rev().copied().collect();
             fastq_writer_paired2
                 .write(
                     &format!("{}/2", frag.id),
@@ -312,7 +312,7 @@ fn write_fragset_haplotypes(
     left_snp_pos: SnpPosition,
     right_snp_pos: SnpPosition,
 ) -> Vec<u8> {
-    let hap_map = utils_frags::set_to_seq_dict(&frags, false);
+    let hap_map = utils_frags::set_to_seq_dict(frags, false);
     let emptydict = FxHashMap::default();
     let title_string = format!(
         ">HAP{}.{}\tSNPRANGE:{}-{}\n",
@@ -320,12 +320,12 @@ fn write_fragset_haplotypes(
     );
     write!(file, "{}", title_string).unwrap();
     let positions: Vec<&SnpPosition> = hap_map.keys().collect();
-    if positions.len() == 0 {
+    if positions.is_empty() {
         return vec![];
     }
     let mut vec_of_alleles = vec![];
     for pos in left_snp_pos..right_snp_pos + 1 {
-        if snp_pos_to_genome_pos.len() == 0 {
+        if snp_pos_to_genome_pos.is_empty() {
             write!(file, "{}:NA\t", pos).unwrap();
         } else {
             write!(
@@ -363,9 +363,9 @@ fn write_fragset_haplotypes(
             }
             write!(file, "\t").unwrap();
         }
-        write!(file, "\n").unwrap();
+        writeln!(file).unwrap();
     }
-    return vec_of_alleles;
+    vec_of_alleles
 }
 
 fn write_reads(
@@ -376,8 +376,8 @@ fn write_reads(
     hapqs: &Vec<u8>,
     gzip: bool,
 ) {
-    fs::create_dir_all(&format!("{}/short_reads", out_bam_part_dir)).unwrap();
-    fs::create_dir_all(&format!("{}/long_reads", out_bam_part_dir)).unwrap();
+    fs::create_dir_all(format!("{}/short_reads", out_bam_part_dir)).unwrap();
+    fs::create_dir_all(format!("{}/long_reads", out_bam_part_dir)).unwrap();
 
     for (i, set) in part.iter().enumerate() {
         if set.is_empty() {
@@ -392,7 +392,7 @@ fn write_reads(
         let left_snp_pos = snp_range_parts_vec[i].0;
         let right_snp_pos = snp_range_parts_vec[i].1;
         //Populate all_part.txt file
-        let mut vec_part: Vec<&Frag> = set.into_iter().cloned().collect();
+        let mut vec_part: Vec<&Frag> = set.iter().cloned().collect();
         vec_part.sort();
         //Non-empty means that we're writing the final partition after path collection
         let gz = if gzip { ".gz" } else { "" };
@@ -442,7 +442,7 @@ fn write_reads(
         for frag in vec_part.iter() {
             let mut found_primary = false;
             for seq in frag.seq_string.iter() {
-                if seq.len() != 0 {
+                if !seq.is_empty() {
                     found_primary = true;
                     break;
                 }
@@ -507,7 +507,7 @@ fn write_reads(
                 } else {
                     right_read_pair = 0;
                 }
-                if frag.seq_string[right_read_pair as usize].len() == 0 {
+                if frag.seq_string[right_read_pair as usize].is_empty() {
                     right_seq_pos = 0;
                 } else {
                     right_seq_pos = frag.seq_string[right_read_pair as usize].len() - 1;
@@ -527,7 +527,7 @@ fn write_reads(
                 }
             }
 
-            if frag.seq_string[right_read_pair as usize].len() == 0 {
+            if frag.seq_string[right_read_pair as usize].is_empty() {
                 right_seq_pos = 0;
             } else if frag.seq_string[right_read_pair as usize].len() > extension + 1
                 && right_seq_pos < frag.seq_string[right_read_pair as usize].len() - extension - 1
@@ -542,7 +542,7 @@ fn write_reads(
                 write_paired_reads_no_trim(
                     &mut fastq_writer_paired1,
                     &mut fastq_writer_paired2,
-                    &frag,
+                    frag,
                 );
             } else {
                 single_end_written = true;
@@ -594,8 +594,8 @@ pub fn write_blocks_to_file<P>(
         .join(format!("{}_phasing.txt", contig));
 
     dbg!(&filename);
-    let file;
-    file = OpenOptions::new()
+    
+    let file = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
@@ -614,9 +614,9 @@ pub fn write_blocks_to_file<P>(
         for pos in length_prev_block..length_prev_block + lengths[i] {
             let pos = pos as SnpPosition;
             if break_positions.contains_key(&pos) {
-                write!(file, "--------\n").unwrap();
+                writeln!(file, "--------").unwrap();
             }
-            if snp_to_genome.len() == 0 {
+            if snp_to_genome.is_empty() {
                 write!(file, "{}:NA\t", pos).unwrap();
             } else {
                 write!(file, "{}:{}\t", pos, snp_to_genome[(pos - 1) as usize]).unwrap();
@@ -653,9 +653,9 @@ pub fn write_blocks_to_file<P>(
                     write!(file, "\t").unwrap();
                 }
             }
-            write!(file, "\n").unwrap();
+            writeln!(file).unwrap();
         }
-        write!(file, "*****\n").unwrap();
+        writeln!(file, "*****").unwrap();
         length_prev_block += lengths[i]
     }
 }
@@ -691,7 +691,7 @@ pub fn write_frags_file(frags: Vec<Frag>, filename: String) {
             }
         }
 
-        write!(file, "\n").unwrap();
+        writeln!(file).unwrap();
     }
 }
 
@@ -795,9 +795,9 @@ fn write_haplotypes(
             }
             hapQ_scores.insert(i, hap_q);
 
-            write!(
+            writeln!(
                 vartig_file,
-                ">HAP{}.{}\tCONTIG:{}\tSNPRANGE:{}-{}\tBASERANGE:{}-{}\tCOV:{:.3}\tERR:{:.4}\tHAPQ:{}\tREL_ERR:{:.3}\n",
+                ">HAP{}.{}\tCONTIG:{}\tSNPRANGE:{}-{}\tBASERANGE:{}-{}\tCOV:{:.3}\tERR:{:.4}\tHAPQ:{}\tREL_ERR:{:.3}",
                 i,
                 out_bam_part_dir,
                 contig,
@@ -814,15 +814,15 @@ fn write_haplotypes(
             let vec_of_alleles = write_fragset_haplotypes(
                 set,
                 &format!("{}", i),
-                &out_bam_part_dir,
+                out_bam_part_dir,
                 &mut vartig_info,
-                &snp_pos_to_genome_pos,
+                snp_pos_to_genome_pos,
                 left_snp_pos,
                 right_snp_pos,
             );
-            write!(
+            writeln!(
                 vartig_file,
-                "{}\n",
+                "{}",
                 std::str::from_utf8(
                     &vec_of_alleles
                         .into_iter()
@@ -843,7 +843,7 @@ fn write_haplotypes(
     //        .unwrap();
 
     let mut top_ploidy_file = OpenOptions::new()
-        .write(true)
+        
         .append(true)
         .create(true)
         .open(top_ploidy_file)
@@ -895,9 +895,9 @@ fn write_haplotypes(
     //    )
     //    .unwrap();
 
-    write!(
+    writeln!(
         top_ploidy_file,
-        "{}\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.4}\n",
+        "{}\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.4}",
         contig,
         avg_global_ploidy,
         total_bases_covered as f64 / contig_len as f64,
@@ -910,7 +910,7 @@ fn write_haplotypes(
     )
     .unwrap();
 
-    return hapQ_scores;
+    hapQ_scores
 }
 
 pub fn write_all_parts_file(
@@ -923,7 +923,7 @@ pub fn write_all_parts_file(
     hapqs: &Vec<u8>,
     rel_err: &Vec<f64>,
 ) {
-    fs::create_dir_all(&out_bam_part_dir).unwrap();
+    fs::create_dir_all(out_bam_part_dir).unwrap();
     let part_path = &format!("{}/{}.haplosets", out_bam_part_dir, prefix);
     let file = File::create(part_path).expect("Can't create file");
 
@@ -937,18 +937,18 @@ pub fn write_all_parts_file(
         }
 
         //Populate all_part.txt file
-        let mut vec_part: Vec<&Frag> = set.into_iter().cloned().collect();
+        let mut vec_part: Vec<&Frag> = set.iter().cloned().collect();
         vec_part.sort();
         if snp_range_parts_vec.is_empty() {
-            write!(file, "#{}\n", i).unwrap();
+            writeln!(file, "#{}", i).unwrap();
         } else {
             let left_snp_pos = snp_range_parts_vec[i].0;
             let right_snp_pos = snp_range_parts_vec[i].1;
             let (cov, err, total_err, total_cov) =
                 utils_frags::get_errors_cov_from_frags(set, left_snp_pos, right_snp_pos);
-            write!(
+            writeln!(
                 file,
-                ">HAP{}.{}\tCONTIG:{}\tSNPRANGE:{}-{}\tBASERANGE:{}-{}\tCOV:{:.3}\tERR:{:.4}\tHAPQ:{}\tREL_ERR:{:.3}\n",
+                ">HAP{}.{}\tCONTIG:{}\tSNPRANGE:{}-{}\tBASERANGE:{}-{}\tCOV:{:.3}\tERR:{:.4}\tHAPQ:{}\tREL_ERR:{:.3}",
                 //1-indexed snp poses are output... this is annoying
                 i,
                 out_bam_part_dir,
@@ -971,9 +971,9 @@ pub fn write_all_parts_file(
             //I think this was done because there
             //can be a lot of short reads. I think we should still
             //output it, though.
-            write!(
+            writeln!(
                 file,
-                "{}\t{}\t{}\n",
+                "{}\t{}\t{}",
                 frag.id.clone(),
                 frag.first_position,
                 frag.last_position
@@ -1017,7 +1017,7 @@ fn convert_dict_to_block(frag: Frag) -> (Vec<SnpPosition>, Vec<Vec<Genotype>>, V
         }
     }
 
-    for (_pos, q) in &vec_q {
+    for q in vec_q.values() {
         qual_block.push(*q);
     }
 
@@ -1061,9 +1061,9 @@ pub fn write_alignment_as_vartig(
         .open(out)
         .unwrap();
     write!(file, "{}", hap_header).unwrap();
-    write!(
+    writeln!(
         file,
-        "{}\n",
+        "{}",
         std::str::from_utf8(
             &vec_of_alleles
                 .into_iter()

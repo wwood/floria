@@ -204,8 +204,8 @@ fn main() {
     let start_t_initial = Instant::now();
     log::info!("Preprocessing VCF/Reference");
     let start_t = Instant::now();
-    let contigs_to_phase;
-    contigs_to_phase = file_reader::get_contigs_to_phase(&options.bam_file);
+    
+    let contigs_to_phase = file_reader::get_contigs_to_phase(&options.bam_file);
     let (mut main_bam, mut short_bam) = file_reader::get_bam_readers(&options);
     log::debug!("Read BAM file successfully.");
 
@@ -219,7 +219,7 @@ fn main() {
     let vcf_profile = file_reader::get_vcf_profile(&options.vcf_file, &contigs_to_phase);
     let snp_to_genome_pos_map = file_reader::get_genotypes_from_vcf_hts(options.vcf_file.clone());
     log::debug!("Read VCF successfully.");
-    if options.reference_fasta != "" {
+    if !options.reference_fasta.is_empty() {
         chrom_seqs = Some(file_reader::get_fasta_seqs(&options.reference_fasta));
         log::debug!("Read reference fasta successfully.");
     }
@@ -258,10 +258,10 @@ fn main() {
             &vcf_profile,
             &options,
             &mut chrom_seqs,
-            &contig,
+            contig,
         );
         log::info!("Number of reads passing filtering: {}", all_frags.len());
-        if all_frags.len() == 0 {
+        if all_frags.is_empty() {
             log::debug!("Contig {} has no fragments", contig);
             continue;
         }
@@ -281,8 +281,8 @@ fn main() {
 
             fs::create_dir_all(&contig_out_dir).unwrap();
 
-            let snp_to_genome_pos: &Vec<usize>;
-            snp_to_genome_pos = snp_to_genome_pos_map.get(contig).unwrap();
+            
+            let snp_to_genome_pos: &Vec<usize> = snp_to_genome_pos_map.get(contig).unwrap();
 
             //We need frags sorted by first position to make indexing easier. We want the
             //counter_id to reflect the position in the vector.
@@ -330,7 +330,7 @@ fn main() {
             let phasing_t = Instant::now();
             let mut hap_graph = graph_processing::generate_hap_graph(
                 &final_frags,
-                &snp_to_genome_pos,
+                snp_to_genome_pos,
                 contig_out_dir.to_string(),
                 &options,
             );
@@ -362,13 +362,13 @@ fn main() {
                     &short_frags,
                     path_parts_snp_endpoints,
                     &options,
-                    &snp_to_genome_pos,
+                    snp_to_genome_pos,
                 );
 
             //Scan over path_parts_snp_endpoints and only put in frags_without_snps that end there.
             let snpless_frags_between_gaps = part_block_manip::get_frags_in_snpless_gaps(
                 &sorted_snp_endpoints,
-                &snp_to_genome_pos,
+                snp_to_genome_pos,
                 &frags_without_snps,
                 options.block_length,
                 &final_frags,
@@ -378,12 +378,12 @@ fn main() {
                 &sorted_path_parts,
                 &sorted_snp_endpoints,
                 contig_out_dir.to_string(),
-                &format!("{}", &contig),
-                &contig,
-                &snp_to_genome_pos,
+                &(&contig).to_string(),
+                contig,
+                snp_to_genome_pos,
                 &options,
                 &snpless_frags_between_gaps,
-                &mut chrom_seqs.as_mut().unwrap(),
+                chrom_seqs.as_mut().unwrap(),
             );
         }
     }
