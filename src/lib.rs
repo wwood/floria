@@ -1,5 +1,3 @@
-#![allow(clippy::all)]
-
 pub mod file_reader;
 
 pub mod types_structs;

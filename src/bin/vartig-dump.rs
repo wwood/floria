@@ -1,5 +1,3 @@
-#![allow(clippy::all, noop_method_call)]
-
 extern crate time;
 use clap::{App, AppSettings, Arg};
 use floria::file_reader;

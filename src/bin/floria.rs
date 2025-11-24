@@ -1,5 +1,3 @@
-#![allow(clippy::all)]
-
 extern crate time;
 use clap::{AppSettings, Arg, Command};
 use floria::file_reader;
