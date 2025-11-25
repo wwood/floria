@@ -50,7 +50,7 @@ pub fn beam_search_phasing<'a>(
         let mut max_num_soln_mut = max_number_solns;
         if i < 25 {
             max_num_soln_mut = ploidy * max_number_solns;
-        } 
+        }
         //        let mut search_node_list_next = vec![];
         let mut search_node_heap_next: BinaryHeap<(Rc<SearchNode>, HapBlock)> = BinaryHeap::new();
         let frag = &all_reads[i];
@@ -70,7 +70,6 @@ pub fn beam_search_phasing<'a>(
             let mut p_value_list = vec![];
             //            let mut same_diff_list = vec![];
             for part_index in 0..ploidy {
-                
                 let (same, diff) = utils_frags::distance_read_haplo_epsilon_empty(
                     frag,
                     &block.blocks[part_index],
@@ -99,7 +98,7 @@ pub fn beam_search_phasing<'a>(
                     //iterative sum of p-values as well.
                     let (score, new_error_vec) =
                         read_to_node_value(node, frag, block, j, epsilon, div_factor, use_mec);
-                    
+
                     let new_node_score = -score;
 
                     let mut new_node = types_structs::build_child_node(

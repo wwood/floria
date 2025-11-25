@@ -234,7 +234,7 @@ pub fn stable_binom_cdf_p_rev(n: usize, k: usize, p: f64, div_factor: f64) -> f6
     if a < p {
         rel_ent = -rel_ent;
     }
-    
+
     //- 0.5 * (6.283*a*(1.0-a)*n64/div_factor).ln();
 
     -n64 / div_factor * rel_ent
@@ -356,9 +356,7 @@ pub fn err_correlations(
         if r1.seq_dict.contains_key(&(*pos + gap)) {
             let next_var = *r1.seq_dict.get(&(*pos + gap)).unwrap();
             //last_pos-1 because positions are 1-indexed
-            let index = seq_err_corr_map
-                .entry(*pos - 1)
-                .or_default();
+            let index = seq_err_corr_map.entry(*pos - 1).or_default();
             let count = index.entry((current_var, next_var)).or_insert(0);
             *count += 1;
         }
@@ -464,9 +462,7 @@ pub fn get_range_with_lengths(
 pub fn add_read_to_block(block: &mut HapBlock, frag: &Frag, part: usize) {
     for pos in frag.positions.iter() {
         let var_at_pos = frag.seq_dict.get(pos).unwrap();
-        let sites = block.blocks[part]
-            .entry(*pos)
-            .or_default();
+        let sites = block.blocks[part].entry(*pos).or_default();
         let site_counter = sites.entry(*var_at_pos).or_insert(OrderedFloat(0.));
         *site_counter += phred_scale(frag, pos);
     }
@@ -475,9 +471,7 @@ pub fn add_read_to_block(block: &mut HapBlock, frag: &Frag, part: usize) {
 pub fn remove_read_from_block(block: &mut HapBlock, frag: &Frag, part: usize) {
     for pos in frag.positions.iter() {
         let var_at_pos = frag.seq_dict.get(pos).unwrap();
-        let sites = block.blocks[part]
-            .entry(*pos)
-            .or_default();
+        let sites = block.blocks[part].entry(*pos).or_default();
         let site_counter = sites.entry(*var_at_pos).or_insert(OrderedFloat(0.));
         if *site_counter != 0. {
             *site_counter -= phred_scale(frag, pos);
@@ -534,10 +528,7 @@ pub fn hybrid_correction(frags: Vec<Frag>) -> (Vec<Frag>, Vec<Frag>) {
                 if j == i {
                     covering_i_frags = covering_i_frags.union(covering_i).copied().collect();
                 } else {
-                    covering_i_frags = covering_i_frags
-                        .intersection(covering_i)
-                        .copied()
-                        .collect();
+                    covering_i_frags = covering_i_frags.intersection(covering_i).copied().collect();
                 }
                 j += 1;
             }
@@ -646,12 +637,7 @@ pub fn get_errors_cov_from_frags(
         }
     }
 
-    (
-        cov,
-        errors / total_support,
-        errors,
-        total_support,
-    )
+    (cov, errors / total_support, errors, total_support)
 }
 
 pub fn distance_between_haplotypes(
@@ -716,9 +702,7 @@ pub fn remove_monomorphic_allele(mut frags: Vec<Frag>, error: f64) -> Vec<Frag> 
 
     for frag in frags.iter() {
         for (snp_pos, geno) in frag.seq_dict.iter() {
-            let count_m = allele_count_map
-                .entry(*snp_pos)
-                .or_default();
+            let count_m = allele_count_map.entry(*snp_pos).or_default();
             let count = count_m.entry(*geno).or_insert(OrderedFloat(0.));
             *count += phred_scale(frag, snp_pos);
         }

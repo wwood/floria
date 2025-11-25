@@ -36,12 +36,13 @@ fn separate_broken_haplogroups(
         let mut current_lastest_pos = 0;
         let mut breaks = vec![];
         for frag in vec_of_frags {
-            if current_lastest_pos != 0 && frag.first_position > current_lastest_pos
+            if current_lastest_pos != 0
+                && frag.first_position > current_lastest_pos
                 && current_lastest_pos >= snp_range_parts_vec[i].0
-                    && current_lastest_pos < snp_range_parts_vec[i].1
-                {
-                    breaks.push(current_lastest_pos);
-                }
+                && current_lastest_pos < snp_range_parts_vec[i].1
+            {
+                breaks.push(current_lastest_pos);
+            }
             if frag.last_position > current_lastest_pos {
                 current_lastest_pos = frag.last_position;
             }
@@ -303,11 +304,14 @@ pub fn bin_haplogroups<'a>(
             true
         } else if x1 >= y1 && x2 <= y2 {
             true
-        } else { x1 <= y1 && x2 >= y2 }
+        } else {
+            x1 <= y1 && x2 >= y2
+        }
     }
 
     fn close_enough(x1: usize, x2: usize, y1: usize, y2: usize, block_len: usize) -> bool {
-        (x2 as i64 - y1 as i64).abs() < 2 * block_len as i64 || (y2 as i64 - x1 as i64).abs() < 2 * block_len as i64
+        (x2 as i64 - y1 as i64).abs() < 2 * block_len as i64
+            || (y2 as i64 - x1 as i64).abs() < 2 * block_len as i64
     }
 
     fn dist(
@@ -552,7 +556,7 @@ pub fn get_hapq<'a>(
                 if (same + diff) == 0. {
                     dist = 1.;
                 } else {
-                    dist = diff / ((same + diff));
+                    dist = diff / (same + diff);
                 }
                 if *ol * (1. - dist) > max_penalty {
                     max_ol = *ol;

@@ -22,6 +22,7 @@ pub type FlowUpVec = Vec<((usize, usize), (usize, usize), f64)>;
 pub struct Options {
     pub bam_file: String,
     pub vcf_file: String,
+    pub bed_methyl_file: String,
     pub use_qual_scores: bool,
     pub gzip: bool,
     pub output_reads: bool,
@@ -198,7 +199,7 @@ impl<'a> HapNode<'a> {
             cov = *allele_cov_list[allele_cov_list.len() * 2 / 3];
         }
         //        let cov = allele_cov_list.last().unwrap_or(&0.);
-        
+
         HapNode {
             frag_set,
             out_edges: vec![],
@@ -240,8 +241,6 @@ pub fn build_child_node<'a>(
     }
     let updated_freqs = new_freqs;
 
-    
-
     SearchNode {
         read,
         part,
@@ -273,8 +272,6 @@ impl PartialOrd for HapBlock {
 }
 
 pub fn build_frag(id: String, counter_id: usize, is_paired: bool) -> Frag {
-    
-
     Frag {
         id,
         counter_id,
