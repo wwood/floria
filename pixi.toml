@@ -1,0 +1,15 @@
+[workspace]
+name = "floria-data-prep"
+version = "0.1.0"
+description = "Test utilities for data preparation scripts"
+authors = ["Codex <codex@openai.com>"]
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+badread = "*"
+python = "3.11.*"
+pytest = "*"
+
+[tasks]
+test-data-prep = "pytest tests/data_preparation/test_simulate_badread_long_reads.py"
