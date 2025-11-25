@@ -43,6 +43,8 @@ tikv-jemallocator = "0"
 [dev-dependencies]
 assert_cmd = "1"
 predicates = "1"
+tempfile = "3"
+walkdir = "2"
 
 [profile.release]
 codegen-units = 1

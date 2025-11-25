@@ -42,6 +42,13 @@ fn main() {
                               .help("VCF file with contig header information; see README if contig header information is not present.")
                               .takes_value(true)
                               .help_heading(mandatory_options))
+                          .arg(Arg::new("bedmethyl")
+                              .long("bedmethyl")
+                              .value_name("BEDMETHYL FILE")
+                              .required(false)
+                              .help("BEDMethyl file enumerating genomic positions and modification codes to phase (e.g., 4mC, 5mC, 6mA).")
+                              .takes_value(true)
+                              .help_heading(mandatory_options))
                           .arg(Arg::new("reference_fasta")
                               .short('r')
                               .takes_value(true)
@@ -204,7 +211,7 @@ fn main() {
     let start_t_initial = Instant::now();
     log::info!("Preprocessing VCF/Reference");
     let start_t = Instant::now();
-    
+
     let contigs_to_phase = file_reader::get_contigs_to_phase(&options.bam_file);
     let (mut main_bam, mut short_bam) = file_reader::get_bam_readers(&options);
     log::debug!("Read BAM file successfully.");
@@ -216,8 +223,15 @@ fn main() {
     //
     //
     //let snp_to_genome_pos_map = file_reader::get_genotypes_from_vcf_hts(options.vcf_file.clone());
-    let vcf_profile = file_reader::get_vcf_profile(&options.vcf_file, &contigs_to_phase);
-    let snp_to_genome_pos_map = file_reader::get_genotypes_from_vcf_hts(options.vcf_file.clone());
+    let bed_methyl_file = if options.bed_methyl_file.is_empty() {
+        None
+    } else {
+        Some(options.bed_methyl_file.as_str())
+    };
+    let vcf_profile =
+        file_reader::get_vcf_profile(&options.vcf_file, &contigs_to_phase, bed_methyl_file);
+    let snp_to_genome_pos_map =
+        file_reader::get_genotypes_from_vcf_hts(options.vcf_file.clone(), bed_methyl_file);
     log::debug!("Read VCF successfully.");
     if !options.reference_fasta.is_empty() {
         chrom_seqs = Some(file_reader::get_fasta_seqs(&options.reference_fasta));
@@ -281,7 +295,6 @@ fn main() {
 
             fs::create_dir_all(&contig_out_dir).unwrap();
 
-            
             let snp_to_genome_pos: &Vec<usize> = snp_to_genome_pos_map.get(contig).unwrap();
 
             //We need frags sorted by first position to make indexing easier. We want the

@@ -9,6 +9,7 @@ use fxhash::{FxHashMap, FxHashSet};
 use log::*;
 use rayon::prelude::*;
 use rust_htslib::bam::ext::BamRecordExtensions;
+use rust_htslib::bam::record::Aux;
 use rust_htslib::bam::IndexedReader;
 use rust_htslib::{bam, bam::Read as DUMMY_NAME1};
 use rust_htslib::{bcf, bcf::Read as DUMMY_NAME2};
@@ -107,7 +108,10 @@ where
 //Read a vcf file to get the genotypes. We read genotypes into a dictionary of keypairs where the
 //keys are positions, and the values are dictionaries which encode the genotypes. E.g. the genotype
 //1 1 0 0 at position 5 would be (5,{1 : 2, 0 : 2}).
-pub fn get_genotypes_from_vcf_hts<P>(vcf_file: P) -> FxHashMap<String, Vec<usize>>
+pub fn get_genotypes_from_vcf_hts<P>(
+    vcf_file: P,
+    bed_methyl_file: Option<&str>,
+) -> FxHashMap<String, Vec<usize>>
 where
     P: AsRef<Path>,
 {
@@ -159,10 +163,6 @@ where
         }
 
         if !is_snp {
-            //            println!(
-            //                "VCF : Variant at position {} is not a snp. Ignoring.",
-            //                unr.pos()
-            //            );
             continue;
         }
 
@@ -170,6 +170,27 @@ where
             .entry(String::from_utf8(ref_chrom_vcf.to_vec()).unwrap())
             .or_insert(Vec::new());
         positions_vec.push(unr.pos() as usize);
+    }
+
+    if let Some(bed_path) = bed_methyl_file {
+        if let Ok(lines) = read_lines(bed_path) {
+            for l in lines.flatten() {
+                let fields: Vec<&str> = l.split('\t').collect();
+                if fields.len() < 3 {
+                    continue;
+                }
+                let chrom = fields[0].to_string();
+                if let Ok(start) = fields[1].parse::<usize>() {
+                    let positions_vec = map_positions_vec.entry(chrom).or_insert(Vec::new());
+                    positions_vec.push(start);
+                }
+            }
+        }
+    }
+
+    for positions in map_positions_vec.values_mut() {
+        positions.sort_unstable();
+        positions.dedup();
     }
 
     map_positions_vec
@@ -200,10 +221,9 @@ fn alignment_passed_check(
             return (false, true);
         } else if !use_supplementary {
             return (false, true);
-        } else if filter_supplementary
-            && mapq < mapq_supp_cutoff {
-                return (false, true);
-            }
+        } else if filter_supplementary && mapq < mapq_supp_cutoff {
+            return (false, true);
+        }
     } else {
         is_supp = false;
     }
@@ -226,8 +246,82 @@ fn alignment_passed_check(
     (true, is_supp)
 }
 
-pub fn get_vcf_profile<'a>(vcf_file: &str, ref_chroms: &'a Vec<String>) -> VcfProfile<'a> {
-    let acgt_upper = [b'A', b'C', b'G', b'T'];
+use std::collections::BTreeMap;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+enum MethylationCode {
+    FourmC,
+    FivemC,
+    SixmA,
+}
+
+fn methylation_code_from_name(name: &str) -> Option<MethylationCode> {
+    match name {
+        "21839" => Some(MethylationCode::FourmC),
+        "m" => Some(MethylationCode::FivemC),
+        "a" => Some(MethylationCode::SixmA),
+        _ => None,
+    }
+}
+
+fn methylation_code_from_block(base: char, code: &str) -> Option<MethylationCode> {
+    match (base.to_ascii_uppercase(), code) {
+        ('C', "21839") => Some(MethylationCode::FourmC),
+        ('C', "m") => Some(MethylationCode::FivemC),
+        ('A', "a") => Some(MethylationCode::SixmA),
+        _ => None,
+    }
+}
+
+const METHYL_ALLELE_4MC: Genotype = b'4';
+const METHYL_ALLELE_5MC: Genotype = b'M';
+const METHYL_ALLELE_6MA: Genotype = b'6';
+
+fn methylation_allele(code: MethylationCode) -> Genotype {
+    match code {
+        MethylationCode::FourmC => METHYL_ALLELE_4MC,
+        MethylationCode::FivemC => METHYL_ALLELE_5MC,
+        MethylationCode::SixmA => METHYL_ALLELE_6MA,
+    }
+}
+
+fn allele_to_methylation_code(allele: Genotype) -> Option<MethylationCode> {
+    match allele {
+        METHYL_ALLELE_4MC => Some(MethylationCode::FourmC),
+        METHYL_ALLELE_5MC => Some(MethylationCode::FivemC),
+        METHYL_ALLELE_6MA => Some(MethylationCode::SixmA),
+        _ => None,
+    }
+}
+
+type MethylationMap = FxHashMap<GnPosition, FxHashSet<MethylationCode>>;
+
+fn load_bed_methyl<P: AsRef<Path>>(bed_path: P) -> FxHashMap<String, MethylationMap> {
+    let mut bed_sites = FxHashMap::default();
+    if let Ok(lines) = read_lines(bed_path) {
+        for l in lines.flatten() {
+            let fields: Vec<&str> = l.split('\t').collect();
+            if fields.len() < 4 {
+                continue;
+            }
+            let chrom = fields[0].to_string();
+            let pos_opt = fields[1].parse::<GnPosition>().ok();
+            let code_opt = methylation_code_from_name(fields[3]);
+            if let (Some(pos), Some(code)) = (pos_opt, code_opt) {
+                let contig_map = bed_sites.entry(chrom).or_insert(FxHashMap::default());
+                let codes = contig_map.entry(pos).or_insert(FxHashSet::default());
+                codes.insert(code);
+            }
+        }
+    }
+    bed_sites
+}
+
+pub fn get_vcf_profile<'a>(
+    vcf_file: &str,
+    ref_chroms: &'a Vec<String>,
+    bed_methyl_file: Option<&str>,
+) -> VcfProfile<'a> {
     let mut vcf_prof = VcfProfile::default();
     let mut vcf = match bcf::Reader::from_path(vcf_file) {
         Ok(vcf) => vcf,
@@ -236,18 +330,18 @@ pub fn get_vcf_profile<'a>(vcf_file: &str, ref_chroms: &'a Vec<String>) -> VcfPr
             std::process::exit(1)
         }
     };
-    let mut snp_counter = 1;
     let mut vcf_pos_allele_map = FxHashMap::default();
     let mut vcf_pos_to_snp_counter_map = FxHashMap::default();
     let mut vcf_snp_pos_to_gn_pos_map = FxHashMap::default();
     let mut chrom_to_index_map = FxHashMap::default();
     for (i, chrom) in ref_chroms.iter().enumerate() {
-        chrom_to_index_map.insert(chrom.as_bytes(), i);
+        chrom_to_index_map.insert(chrom.clone(), i);
     }
 
     let vcf_header = vcf.header().clone();
+    let mut variants: FxHashMap<&str, BTreeMap<GnPosition, FxHashSet<Genotype>>> =
+        FxHashMap::default();
 
-    let mut last_ref_chrom = &String::default();
     for rec in vcf.records() {
         let unr = rec.unwrap();
         let alleles = unr.alleles();
@@ -255,37 +349,17 @@ pub fn get_vcf_profile<'a>(vcf_file: &str, ref_chroms: &'a Vec<String>) -> VcfPr
         let mut is_snp = true;
 
         let record_rid = unr.rid().unwrap();
-        let ref_chrom_vcf =
-            //String::from_utf8(vcf_header.rid2name(record_rid).unwrap().to_vec()).unwrap();
-            vcf_header.rid2name(record_rid).unwrap();
-        let result = chrom_to_index_map.get(&ref_chrom_vcf);
+        let ref_chrom_vcf = vcf_header.rid2name(record_rid).unwrap();
+        let ref_chrom_vcf_str = String::from_utf8(ref_chrom_vcf.to_vec()).unwrap();
+        let result = chrom_to_index_map.get(&ref_chrom_vcf_str);
         if result.is_none() {
             continue;
         }
         let contig_name = &ref_chroms[*result.unwrap()];
-        //dbg!(String::from_utf8_lossy(ref_chrom_vcf));
-        if last_ref_chrom != contig_name {
-            snp_counter = 1;
-            last_ref_chrom = contig_name;
-        }
-        let pos_allele_map = vcf_pos_allele_map
-            .entry(contig_name.as_str())
-            .or_insert(FxHashMap::default());
-        let pos_to_snp_counter_map = vcf_pos_to_snp_counter_map
-            .entry(contig_name.as_str())
-            .or_insert(FxHashMap::default());
-        let snp_pos_to_gn_pos_map = vcf_snp_pos_to_gn_pos_map
-            .entry(contig_name.as_str())
-            .or_insert(FxHashMap::default());
+        let contig_key = contig_name.as_str();
 
         for allele in alleles.iter() {
-            if allele.len() > 1 {
-                is_snp = false;
-                break;
-            } else if acgt_upper
-                .iter()
-                .all(|x| *x != allele[0].to_ascii_uppercase())
-            {
+            if allele.len() != 1 {
                 is_snp = false;
                 break;
             }
@@ -296,10 +370,51 @@ pub fn get_vcf_profile<'a>(vcf_file: &str, ref_chroms: &'a Vec<String>) -> VcfPr
             continue;
         }
 
-        snp_pos_to_gn_pos_map.insert(snp_counter, unr.pos() as GnPosition);
-        pos_to_snp_counter_map.insert(unr.pos() as GnPosition, snp_counter);
-        snp_counter += 1;
-        pos_allele_map.insert(unr.pos() as GnPosition, al_vec);
+        variants
+            .entry(contig_key)
+            .or_insert(BTreeMap::new())
+            .insert(unr.pos() as GnPosition, al_vec.into_iter().collect());
+    }
+
+    if let Some(bed_path) = bed_methyl_file {
+        let bed_sites = load_bed_methyl(bed_path);
+        for (chrom, positions) in bed_sites {
+            if let Some(result) = chrom_to_index_map.get(&chrom) {
+                let contig_name = &ref_chroms[*result];
+                let contig_key = contig_name.as_str();
+                let contig_map = variants.entry(contig_key).or_insert(BTreeMap::new());
+                for (pos, codes) in positions {
+                    let allele_set = contig_map.entry(pos).or_insert(FxHashSet::default());
+                    for code in codes {
+                        allele_set.insert(methylation_allele(code));
+                    }
+                }
+            }
+        }
+    }
+
+    for chrom in ref_chroms.iter() {
+        let mut snp_counter = 1;
+        if let Some(entries) = variants.get(chrom.as_str()) {
+            let pos_allele_map = vcf_pos_allele_map
+                .entry(chrom.as_str())
+                .or_insert(FxHashMap::default());
+            let pos_to_snp_counter_map = vcf_pos_to_snp_counter_map
+                .entry(chrom.as_str())
+                .or_insert(FxHashMap::default());
+            let snp_pos_to_gn_pos_map = vcf_snp_pos_to_gn_pos_map
+                .entry(chrom.as_str())
+                .or_insert(FxHashMap::default());
+
+            for (pos, alleles) in entries.iter() {
+                let mut al_vec: Vec<Genotype> = alleles.iter().copied().collect();
+                al_vec.sort_unstable();
+                snp_pos_to_gn_pos_map.insert(snp_counter, *pos as GnPosition);
+                pos_to_snp_counter_map.insert(*pos as GnPosition, snp_counter);
+                pos_allele_map.insert(*pos as GnPosition, al_vec);
+                snp_counter += 1;
+            }
+        }
     }
 
     vcf_prof.vcf_pos_allele_map = vcf_pos_allele_map;
@@ -673,7 +788,14 @@ fn frag_from_record(
     let mut leading_hardclips = 0;
     let paired =
         (record.flags() & first_in_pair_mask > 0) || (record.flags() & second_in_pair_mask > 0);
-    let aligned_pairs = record.aligned_pairs_full();
+    let aligned_pairs: Vec<[Option<i64>; 2]> = record.aligned_pairs_full().collect();
+    let mut read_to_genome_pos = vec![None; record.seq().len()];
+    for pair in aligned_pairs.iter() {
+        if let (Some(read_pos), Some(genome_pos)) = (pair[0], pair[1]) {
+            read_to_genome_pos[read_pos as usize] = Some(genome_pos as GnPosition);
+        }
+    }
+    let methylated_positions = methylated_genome_positions(record, &read_to_genome_pos);
     let mut _last_read_aligned_pos = 0;
     let mut frag = build_frag(
         String::from_utf8(record.qname().to_vec()).unwrap(),
@@ -708,7 +830,26 @@ fn frag_from_record(
                     .iter()
                     .enumerate()
                 {
-                    if readbase == *allele {
+                    if let Some(mod_code) = allele_to_methylation_code(*allele) {
+                        if methylated_positions
+                            .get(&genome_pos)
+                            .map_or(false, |codes| codes.contains(&mod_code))
+                        {
+                            let snp_pos = snp_positions[&genome_pos] as SnpPosition;
+                            frag.seq_dict.insert(snp_pos, i as Genotype);
+                            frag.qual_dict.insert(snp_pos, record.qual()[seq_pos]);
+                            if snp_pos < frag.first_position {
+                                frag.first_position = snp_pos;
+                            }
+                            if snp_pos > frag.last_position {
+                                frag.last_position = snp_pos
+                            }
+                            //Long read assumption.
+                            frag.snp_pos_to_seq_pos
+                                .insert(snp_pos, (0, seq_pos + leading_hardclips as usize));
+                            break;
+                        }
+                    } else if readbase == *allele {
                         let snp_pos = snp_positions[&genome_pos] as SnpPosition;
                         frag.seq_dict.insert(snp_pos, i as Genotype);
                         frag.qual_dict.insert(snp_pos, record.qual()[seq_pos]);
@@ -731,7 +872,8 @@ fn frag_from_record(
     frag.seq_string[0] = DnaString::from_acgt_bytes(&record.seq().as_bytes());
     frag.positions = frag
         .seq_dict
-        .keys().copied()
+        .keys()
+        .copied()
         .collect::<FxHashSet<SnpPosition>>();
     frag.qual_string[0] = record
         .qual()
@@ -741,10 +883,112 @@ fn frag_from_record(
     frag
 }
 
+fn methylated_genome_positions(
+    record: &bam::Record,
+    read_to_genome_pos: &Vec<Option<GnPosition>>,
+) -> MethylationMap {
+    let mm_tag = record.aux(b"MM").or_else(|_| record.aux(b"Mm"));
+    if mm_tag.is_err() {
+        return FxHashMap::default();
+    }
+
+    let mm_tag = mm_tag.unwrap();
+    let mm_str = match mm_tag {
+        Aux::String(s) => std::str::from_utf8(s.as_bytes()).unwrap_or("").to_owned(),
+        _ => return FxHashMap::default(),
+    };
+
+    let mut positions_by_base: FxHashMap<char, Vec<usize>> = FxHashMap::default();
+    for (i, base) in record.seq().as_bytes().iter().enumerate() {
+        let b = (*base as char).to_ascii_uppercase();
+        if b == 'C' || b == 'A' {
+            positions_by_base.entry(b).or_insert(Vec::new()).push(i);
+        }
+    }
+
+    let mut methylated_sites = FxHashMap::default();
+
+    for block in mm_str.split(';') {
+        if block.is_empty() {
+            continue;
+        }
+        let block = block.trim();
+        let mut header_payload = block.splitn(2, ',');
+        let header = if let Some(h) = header_payload.next() {
+            h
+        } else {
+            continue;
+        };
+        let payload = if let Some(p) = header_payload.next() {
+            p
+        } else {
+            continue;
+        };
+
+        let mut header_chars = header.chars();
+        let base = if let Some(b) = header_chars.next() {
+            b
+        } else {
+            continue;
+        };
+        let strand = if let Some(s) = header_chars.next() {
+            s
+        } else {
+            continue;
+        };
+        if strand != '+' && strand != '-' {
+            continue;
+        }
+
+        let mut code = String::new();
+        for c in header_chars {
+            if c == '?' || c == '.' {
+                break;
+            }
+            code.push(c);
+        }
+
+        let mod_code = methylation_code_from_block(base, code.as_str());
+        if mod_code.is_none() {
+            continue;
+        }
+        let mod_code = mod_code.unwrap();
+
+        let canonical_base = base.to_ascii_uppercase();
+        let base_positions_opt = positions_by_base.get(&canonical_base);
+        if base_positions_opt.is_none() {
+            continue;
+        }
+        let base_positions = base_positions_opt.unwrap();
+
+        let mut canonical_index: isize = -1;
+        for offset_str in payload.split(',').filter(|s| !s.is_empty()) {
+            if let Ok(offset) = offset_str.parse::<isize>() {
+                canonical_index += offset + 1;
+                if canonical_index < 0 {
+                    continue;
+                }
+                let canonical_index = canonical_index as usize;
+                if canonical_index >= base_positions.len() {
+                    break;
+                }
+                let read_pos = base_positions[canonical_index];
+                if let Some(g_pos) = read_to_genome_pos[read_pos] {
+                    let entry = methylated_sites
+                        .entry(g_pos)
+                        .or_insert(FxHashSet::default());
+                    entry.insert(mod_code);
+                }
+            }
+        }
+    }
+
+    methylated_sites
+}
+
 pub fn get_contigs_to_phase(bam_file: &str) -> Vec<String> {
     let bam = IndexedReader::from_path(bam_file).unwrap();
-    bam
-        .header()
+    bam.header()
         .target_names()
         .iter()
         .map(|x| String::from_utf8(x.to_vec()).unwrap())

@@ -594,7 +594,7 @@ pub fn write_blocks_to_file<P>(
         .join(format!("{}_phasing.txt", contig));
 
     dbg!(&filename);
-    
+
     let file = OpenOptions::new()
         .write(true)
         .create(true)
@@ -843,7 +843,6 @@ fn write_haplotypes(
     //        .unwrap();
 
     let mut top_ploidy_file = OpenOptions::new()
-        
         .append(true)
         .create(true)
         .open(top_ploidy_file)

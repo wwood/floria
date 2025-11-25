@@ -201,19 +201,16 @@ fn get_local_hap_blocks<'a>(
             //            );
             let mec_threshold;
             if options.ploidy_sensitivity == 1 {
-                mec_threshold = 1.0
-                    / (1.0 - epsilon)
-                    / (1.0 + 1.0 / (((ploidy as f64).powf(0.50) + 1.00)));
+                mec_threshold =
+                    1.0 / (1.0 - epsilon) / (1.0 + 1.0 / ((ploidy as f64).powf(0.50) + 1.00));
             } else if options.ploidy_sensitivity == 2 {
                 //                mec_threshold =
                 //                1.0 / (1.0 - epsilon) / (1.0 + 1.0 / ((ploidy as f64).powf(0.75) + 1.32) as f64);
-                mec_threshold = 1.0
-                    / (1.0 - epsilon)
-                    / (1.0 + 1.0 / (((ploidy as f64).powf(1.00) + 1. / 3.)));
+                mec_threshold =
+                    1.0 / (1.0 - epsilon) / (1.0 + 1.0 / ((ploidy as f64).powf(1.00) + 1. / 3.));
             } else {
-                mec_threshold = 1.0
-                    / (1.0 - epsilon)
-                    / (1.0 + 1.0 / (((ploidy as f64).powf(1.00) + 1.00)));
+                mec_threshold =
+                    1.0 / (1.0 - epsilon) / (1.0 + 1.0 / ((ploidy as f64).powf(1.00) + 1.00));
             }
             log::trace!(
                 "Expected MEC ratio {}, observed MEC ratio {}",

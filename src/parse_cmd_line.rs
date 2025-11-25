@@ -145,6 +145,7 @@ pub fn parse_cmd_line(matches: ArgMatches) -> Options {
     //If the user is getting frag files from BAM and VCF.
 
     let vcf_file = matches.value_of("vcf").unwrap().to_string();
+    let bed_methyl_file = matches.value_of("bedmethyl").unwrap_or("").to_string();
 
     if !bam {
         panic!("Must input a BAM file.")
@@ -180,10 +181,10 @@ pub fn parse_cmd_line(matches: ArgMatches) -> Options {
         std::process::exit(1);
     }
 
-    
     Options {
         bam_file,
         vcf_file,
+        bed_methyl_file,
         use_qual_scores,
         gzip,
         output_reads,
